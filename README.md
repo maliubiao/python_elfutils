@@ -43,3 +43,35 @@ in .symtab
 0x67f580  ngx_core_commands             
 0x67f900  ngx_debug_points              
 0x0       ngx_log.c       
+
+.dynamic
+DT_NEEDED           init.c                        
+DT_NEEDED           libcrypt.so.1                 
+DT_NEEDED           libpcre.so.1                  
+DT_NEEDED           libcrypto.so.1.0.0            
+DT_NEEDED           libz.so.1                     
+DT_NEEDED           libc.so.6                     
+DT_INIT             0x402a90       
+DT_FINI             0x465254       
+DT_INIT_ARRAY       0x67edb0       
+DT_INIT_ARRAYSZ     0x8            
+DT_FINI_ARRAY       0x67edb8       
+DT_FINI_ARRAYSZ     0x8            
+DT_HASH             0x400298       
+DT_GNU_HASH         0x400708       
+DT_STRTAB           0x401580       
+DT_SYMTAB           0x400758       
+DT_STRSZ            0x5e5          
+DT_SYMENT           0x18           
+DT_DEBUG            0x0            
+DT_PLTGOT           0x67f000       
+DT_PLTRELSZ         0xcd8          
+DT_PLTREL           0x7            
+DT_JMPREL           0x401db8       
+DT_RELA             0x401d58       
+DT_RELASZ           0x60           
+DT_RELAENT          0x18           
+DT_VERNEED          0x401c98       
+DT_VERNEEDNUM       0x3            
+DT_VERSYM           0x401b66       
+DT_NULL             0x0  
