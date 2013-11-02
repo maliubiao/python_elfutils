@@ -6,7 +6,8 @@ elf = {
     "sections": [],
     "programs": [], 
     "strtabs": {},
-    "symtabs": {}
+    "symtabs": {},
+    "dynamic": []
     }
 
 section_header = {
@@ -23,6 +24,20 @@ section_header = {
         "align": 0
         }
 
+elf_arch_type = {
+        0: "EM_NONE",
+        3: "EM_386",
+        62: "EM_X86_64"
+        }
+        
+elf_type = {
+        0: "ET_NONE",
+        1: "ET_REL",
+        2: "ET_EXEC",
+        3: "ET_DYN",
+        4: "ET_CORE"
+        }
+
 sh_type = {
         0: "SHT_NULL",
         1: "SHT_PROGBITS",
@@ -35,13 +50,34 @@ sh_type = {
         8: "SHT_NOBITS",
         9: "SHT_REL",
         10: "SHT_SHLIB",
-        11: "SHT_DYNSYM"
+        11: "SHT_DYNSYM",
+        14: "SHT_INIT_ARRAY",
+        15: "SHT_FINI_ARRAY",
+        16: "SHT_PREINIT_ARRAY",
+        17: "SHT_GROUP",
+        18: "SHT_SYMTAB_SHNDX",
+        0x60000000: "SHT_LOOS",
+        0x6fffffff: "SHT_HIOS",
+        0x6fff4700: "SHT_GNU_INCREMENTAL_INPUTS",
+        0x6ffffff5: "SHT_GNU_ATTRIBUTES",
+        0x6ffffff6: "SHT_GNU_HASH",
+        0x6ffffff7: "SHT_GNU_LIBLIST" 
         }
 
 sh_flags = {
-        1: "SHF_WRITE",
-        2: "SHF_ALLOC",
-        4: "SHF_EXECINSTR"
+        1 << 0: "SHF_WRITE",
+        1 << 1: "SHF_ALLOC",
+        1 << 2: "SHF_EXECINSTR",
+        1 << 4: "SHF_MERGE",
+        1 << 5: "SHF_STRINGS",
+        1 << 6: "SHF_INFO_LINK",
+        1 << 7: "SHF_LINK_ORDER",
+        1 << 8: "SHF_OS_NONCONFORMING",
+        1 << 9: "SHF_GROUP",
+        1 << 10: "SHF_TLS",
+        0x0ff00000: "SHF_MASKOS",
+        0xf0000000: "SHF_MASKPROC", 
+        0x80000000: "SHF_EXCLUDE"
         }
 
 program_header = {
@@ -62,7 +98,8 @@ ph_type = {
         3: "PT_INTERP",
         4: "PT_NOTE",
         5: "PT_SHLIB",
-        6: "PT_PHDR"
+        6: "PT_PHDR",
+        7: "PT_TLS" 
         }
 
 ph_flags = {
@@ -101,7 +138,52 @@ dynamic_type = {
         21: "DT_DEBUG",
         22: "DT_TEXTREL",
         23: "DT_JMPREL",
-        24: "DT_BIND_NOW"
+        24: "DT_BIND_NOW",
+        25: "DT_INIT_ARRAY",
+        26: "DT_FINI_ARRAY",
+        27: "DT_INIT_ARRAYSZ",
+        28: "DT_FINI_ARRAYSZ",
+        29: "DT_RUNPATH",
+        30: "DT_FLAGS",
+        31: "DT_ENCODING",
+        32: "DT_PREINIT_ARRAY",
+        33: "DT_PREINIT_ARRAYSZ",
+        0x6000000d: "DT_LOOS",
+        0x6ffff000: "DT_HIOS",
+        0x70000000: "DT_LOPROC",
+        0x7fffffff: "DT_HIPROC",
+        0x6ffffd00: "DT_VALRNGLO",
+        0x6ffffdf5: "DT_GNU_PRELINKED",
+        0x6ffffdf6: "DT_GNU_CONFLICTSZ",
+        0x6ffffdf7: "DT_GNU_LIBLISTSZ",
+        0x6ffffdf8: "DT_CHECKSUM",
+        0x6ffffdf9: "DT_PLTPADSZ",
+        0x6ffffdfa: "DT_MOVEENT",
+        0x6ffffdfb: "DT_MOVESZ",
+        0x6ffffdfc: "DT_FEATURE",
+        0x6ffffdfd: "DT_POSFLAG_1",
+        0x6ffffdfe: "DT_SYMINSZ",
+        0x6ffffdff: "DT_SYMINENT", 
+        0x6ffffe00: "DT_ADDRRNGLO",
+        0x6ffffef5: "DT_GNU_HASH",
+        0x6ffffef6: "DT_TLSDESC_PLT",
+        0x6ffffef7: "DT_TLSDESC_GOT",
+        0x6ffffef8: "DT_GNU_CONFLICT",
+        0x6ffffef9: "DT_GNU_LIBLIST",
+        0x6ffffefa: "DT_CONFIG",
+        0x6ffffefb: "DT_DEPAUDIT",
+        0x6ffffefc: "DT_AUDIT",
+        0x6ffffefd: "DT_PLTPAD",
+        0x6ffffefe: "DT_MOVETAB",
+        0x6ffffeff: "DT_SYMINFO",
+        0x6ffffff9: "DT_RELACOUNT",
+        0x6ffffffa: "DT_RELCOUNT",
+        0x6ffffffb: "DT_RELCOUNT",
+        0x6ffffffc: "DT_VERDEF",
+        0x6ffffffd: "DT_VERDEFNUM",
+        0x6ffffffe: "DT_VERNEED",
+        0x6fffffff: "DT_VERNEEDNUM",
+        0x6ffffff0: "DT_VERSYM"
         }
 
 rel_type = {
@@ -117,6 +199,36 @@ rel_type = {
         9: "R_386_GOTOFF",
         10: "R_386_GOTPC"
         }
+
+sym_type = {
+        0: "STT_NOTYPE",
+        1: "STT_OBJECT",
+        2: "STT_FUNC",
+        3: "STT_SECTION",
+        4: "STT_FILE",
+        5: "STT_COMMON",
+        6: "STT_TLS",
+        8: "STT_RELC",
+        9: "STT_SRELC",
+        10: "STT_LOOS",
+        12: "STT_HIOS",
+        13: "STT_LOPROC",
+        15: "STT_HIPROC"
+        } 
+
+sym_bind_type = {
+        0: "STB_LOCAL", 
+        1: "STB_GLOBAL",
+        2: "STB_WEAK"
+        } 
+
+sym_vis_type = {
+        0: "STV_DEFAULT",
+        1: "STV_INTERNAL",
+        2: "STV_HIDDEN",
+        3: "STV_PROTECTED"
+        }
+
 
 def read_header(buffer):
     buffer.seek(0)
@@ -273,10 +385,45 @@ def read_symtab(buffer):
         dynsym = elf["strtabs"][".dynstr"]
         for symbol in elf["symtabs"][".dynsym"]:
             if symbol["name"]:
-                symbol["name"] = dynsym[symbol["name"]]
+                try:
+                    symbol["name"] = dynsym[symbol["name"]]
+                except:
+                    symbol["name"] = "unknown"
 
 def read_rela(buffer):
     pass
+
+def read_dyn(buffer): 
+    sections = elf["sections"]
+    dynamic = None
+    for section in sections:
+        if section["type"] == 6:
+            dynamic = section            
+    dynamic_list = elf["dynamic"]
+    buffer.seek(dynamic["offset"])
+    total = dynamic["size"] / dynamic["entsize"] 
+    for entry in range(total):
+        d_tag = strtoint(buffer.read(8))
+        value = strtoint(buffer.read(8)) 
+        dynamic_list.append({d_tag: value})    
+        if not d_tag:
+            break
+    in_symtab = [1, 14, 15]     
+    strtab = elf["strtabs"][".strtab"]
+    dyntab = elf["strtabs"][".dynstr"]
+    for entry in dynamic_list: 
+        d_tag = entry.keys()[0]
+        if d_tag in in_symtab:
+            if not d_tag:
+                continue
+            if not entry[d_tag]:
+                continue
+            name =  None
+            try:
+                name = strtab[entry[d_tag]]
+            except:
+                name = dyntab[entry[d_tag]]
+            entry[d_tag] = name 
 
 
 if __name__ == "__main__":
@@ -285,14 +432,26 @@ if __name__ == "__main__":
         print "error"
         exit(0)
     binfile = open(sys.argv[1], "r")
-    read_header(binfile) 
-    read_section_header(binfile)
-    read_program_header(binfile)
-    read_strtab(binfile) 
-    read_symtab(binfile) 
+    buffer = cStringIO.StringIO()
+    buffer.write(binfile.read())
+    buffer.seek(0)
+    read_header(buffer) 
+    read_section_header(buffer)
+    read_program_header(buffer)
+    read_strtab(buffer) 
+    read_symtab(buffer) 
+    read_dyn(buffer)
     symtabs = elf["symtabs"] 
     for symtab in symtabs:    
         print "in",symtab 
         for symbol in symtabs[symtab]: 
-            print hex(symbol["value"]),"\t",symbol["name"] 
+            print "{:<15}{:<40} {:<3}".format(hex(symbol["value"]), symbol["name"], sym_vis_type[symbol["vis"]])
         print "\n"
+    dynamic = elf["dynamic"]
+    for entry in dynamic:
+        d_tag = dynamic_type[entry.keys()[0]] 
+        value = entry.values()[0]
+        if isinstance(value, str): 
+            print "{:<20}{:<30}".format(d_tag, value)     
+        else:
+            print "{:<20}{:<15}".format(d_tag, hex(value))
