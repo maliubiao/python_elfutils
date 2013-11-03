@@ -1,15 +1,7 @@
 import cStringIO
 from baseutils import strtoint
 
-elf = {
-    "elf_header": {},
-    "sections": [],
-    "programs": [], 
-    "strtabs": {},
-    "symtabs": {},
-    "dynamic": []
-    }
-
+elf = None
 section_header = {
         "index": 0,
         "name": "",
@@ -222,6 +214,15 @@ sym_bind_type = {
         2: "STB_WEAK"
         } 
 
+sym_spec_index = {
+        0: "SHN_UNDEF", 
+        0xff00: "SHN_LOPROC",
+        0xff1f: "SHN_HIPROC",
+        0xfff1: "SHN_ABS",
+        0xfff2: "SHN_COMMON",
+        0xffff: "HIRESERVE"
+        }
+
 sym_vis_type = {
         0: "STV_DEFAULT",
         1: "STV_INTERNAL",
@@ -393,7 +394,7 @@ def read_symtab(buffer):
 def read_rela(buffer):
     pass
 
-def read_dyn(buffer): 
+def read_dynamic(buffer): 
     sections = elf["sections"]
     dynamic = None
     for section in sections:
@@ -425,13 +426,16 @@ def read_dyn(buffer):
                 name = dyntab[entry[d_tag]]
             entry[d_tag] = name 
 
-
-if __name__ == "__main__":
-    import sys
-    if sys.argv < 2:
-        print "error"
-        exit(0)
-    binfile = open(sys.argv[1], "r")
+def set_target(binfile):
+    global elf 
+    elf = {
+        "elf_header": {},
+        "sections": [],
+        "programs": [], 
+        "strtabs": {},
+        "symtabs": {},
+        "dynamic": []
+        } 
     buffer = cStringIO.StringIO()
     buffer.write(binfile.read())
     buffer.seek(0)
@@ -440,18 +444,5 @@ if __name__ == "__main__":
     read_program_header(buffer)
     read_strtab(buffer) 
     read_symtab(buffer) 
-    read_dyn(buffer)
-    symtabs = elf["symtabs"] 
-    for symtab in symtabs:    
-        print "in",symtab 
-        for symbol in symtabs[symtab]: 
-            print "{:<15}{:<40} {:<3}".format(hex(symbol["value"]), symbol["name"], sym_vis_type[symbol["vis"]])
-        print "\n"
-    dynamic = elf["dynamic"]
-    for entry in dynamic:
-        d_tag = dynamic_type[entry.keys()[0]] 
-        value = entry.values()[0]
-        if isinstance(value, str): 
-            print "{:<20}{:<30}".format(d_tag, value)     
-        else:
-            print "{:<20}{:<15}".format(d_tag, hex(value))
+    read_dynamic(buffer)
+    return elf
