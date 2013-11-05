@@ -45,7 +45,7 @@ def print_symbol(elf):
 def print_pheader(elf):
     pheader = elf['programs']
     of = "{:<10}{:<10}{:<10}{:<10}{:<10}{:<10}{:<10}{:<5}" 
-    print of.format("Type", "Offset", "VirtAddr", "PhysAddr", "FileSize", "MemSize", "Flags", "Align")
+    print of.format("Type", "Align", "Offset", "VirtAddr", "PhysAddr", "FileSize", "MemSize", "Flags")
     for entry in pheader:
         ptype = elfutils.ph_type[entry['type']].split("_")[-1]
         flag = elfutils.ph_flags[entry['flag']]
@@ -56,6 +56,8 @@ def print_pheader(elf):
         memsize = hex(entry['memsize'])
         align = hex(entry['align'])
         print of.format(ptype, align, offset, virt, phys, filesize, memsize, flag)
+    if elf['interpreter']:
+        print "interpreter: ", elf['interpreter']
     print "\n"
 
 def print_sheader(elf):

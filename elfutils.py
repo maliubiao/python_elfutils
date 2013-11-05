@@ -316,7 +316,7 @@ def read_program_header(buffer):
     e_phnum = elf_header["e_phnum"] 
     e_phentsize = elf_header["e_phentsize"]
     for num in range(e_phnum):
-        programs.append({
+        entry = {
             "type": strtoint(buffer.read(4)),
             "flag": strtoint(buffer.read(4)),
             "offset": strtoint(buffer.read(8)),
@@ -325,7 +325,14 @@ def read_program_header(buffer):
             "filesize": strtoint(buffer.read(8)),
             "memsize": strtoint(buffer.read(8)),
             "align": strtoint(buffer.read(8))
-            })
+            }
+        #INTERP
+        if entry['type'] == 3:
+            mark = buffer.tell() 
+            buffer.seek(entry['offset'])
+            elf['interpreter'] = buffer.read(entry['filesize']) 
+            buffer.seek(mark)
+        programs.append(entry)
 
 
 def build_strtab(buffer, section):
@@ -450,8 +457,7 @@ def read_dynamic(buffer):
             if not d_tag:
                 continue
             if not entry[d_tag]:
-                continue
-            name =  None
+                continue 
             try:
                 name = strtab[entry[d_tag]]
             except:
@@ -464,6 +470,7 @@ def set_target(path):
         "elf_header": {},
         "sections": [],
         "programs": [], 
+        "interpreter": "",
         "strtabs": {},
         "symtabs": {},
         "dynamic": []
