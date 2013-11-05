@@ -2,6 +2,7 @@ import cStringIO
 from baseutils import strtoint
 
 elf = None
+
 section_header = {
         "index": 0,
         "name": "",
@@ -22,6 +23,19 @@ elf_arch_type = {
         62: "EM_X86_64"
         }
         
+elf_encoding = {
+        0: "ELFDATANONE",
+        1: "ELFDATA2LSB",
+        2: "ELFDATA2MSB"
+        }
+
+
+elf_class_type = {
+        0: "ELFCLASSNONE",
+        1: "ELFCLASS32",
+        2: "ELFCLASS64"
+        }
+
 elf_type = {
         0: "ET_NONE",
         1: "ET_REL",
@@ -53,10 +67,14 @@ sh_type = {
         0x6fff4700: "SHT_GNU_INCREMENTAL_INPUTS",
         0x6ffffff5: "SHT_GNU_ATTRIBUTES",
         0x6ffffff6: "SHT_GNU_HASH",
-        0x6ffffff7: "SHT_GNU_LIBLIST" 
+        0x6ffffff7: "SHT_GNU_LIBLIST",
+        0x6ffffffd: "SHT_GNU_verdef",
+        0x6ffffffe: "SHT_GNU_verneed",
+        0x6fffffff: "SHT_GNU_versym"
         }
 
 sh_flags = {
+        0: "SHF_NONE",
         1 << 0: "SHF_WRITE",
         1 << 1: "SHF_ALLOC",
         1 << 2: "SHF_EXECINSTR",
@@ -71,6 +89,14 @@ sh_flags = {
         0xf0000000: "SHF_MASKPROC", 
         0x80000000: "SHF_EXCLUDE"
         }
+
+
+def decide_shflags(flag):
+    t = []
+    for key in sh_flags:
+        if flag & key:
+            t.append(sh_flags[key])
+    return "+".join(t)
 
 program_header = {
         "type": "",
@@ -91,7 +117,14 @@ ph_type = {
         4: "PT_NOTE",
         5: "PT_SHLIB",
         6: "PT_PHDR",
-        7: "PT_TLS" 
+        7: "PT_TLS",
+        0x60000000: "PT_LOOS",
+        0x6fffffff: "PT_HIOS",
+        0x70000000: "PT_LOPROC",
+        0x7fffffff: "PT_HIPROC",
+        0x6474e550: "PT_GNU_EH_FRAME",
+        0x6474e551: "PT_GNU_STACK",
+        0x6474e552: "PT_GNU_RELRO"
         }
 
 ph_flags = {
