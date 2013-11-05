@@ -2,6 +2,7 @@ import cStringIO
 from baseutils import strtoint
 
 elf = None
+_read = None
 
 section_header = {
         "index": 0,
@@ -266,26 +267,26 @@ sym_vis_type = {
 def read_header(buffer):
     buffer.seek(0)
     elf_header = elf['elf_header']
-    elf_header["file_ident"] = buffer.read(4)
+    elf_header["file_ident"] = _read(4)
     assert elf_header["file_ident"] == "\x7fELF"
-    elf_header["file_class"] = strtoint(buffer.read(1))
-    elf_header["file_encoding"] = strtoint(buffer.read(1))
-    elf_header["file_version"] = strtoint(buffer.read(1))
+    elf_header["file_class"] = strtoint(_read(1))
+    elf_header["file_encoding"] = strtoint(_read(1))
+    elf_header["file_version"] = strtoint(_read(1))
     #ignore 9 chars
-    buffer.read(9) 
-    elf_header["e_type"] = strtoint(buffer.read(2))
-    elf_header["e_machine"] = strtoint(buffer.read(2))
-    elf_header["e_version"] = strtoint(buffer.read(4))
-    elf_header["e_entry"] = strtoint(buffer.read(8))
-    elf_header["e_phoff"] = strtoint(buffer.read(8))
-    elf_header["e_shoff"] = strtoint(buffer.read(8))
-    elf_header["e_flags"] = strtoint(buffer.read(4))
-    elf_header["e_ehsize"] = strtoint(buffer.read(2))
-    elf_header["e_phentsize"] = strtoint(buffer.read(2))
-    elf_header["e_phnum"] = strtoint(buffer.read(2))
-    elf_header["e_shentsize"] = strtoint(buffer.read(2))
-    elf_header["e_shnum"] = strtoint(buffer.read(2))
-    elf_header["e_shstrndx"] = strtoint(buffer.read(2))
+    _read(9) 
+    elf_header["e_type"] = strtoint(_read(2))
+    elf_header["e_machine"] = strtoint(_read(2))
+    elf_header["e_version"] = strtoint(_read(4))
+    elf_header["e_entry"] = strtoint(_read(8))
+    elf_header["e_phoff"] = strtoint(_read(8))
+    elf_header["e_shoff"] = strtoint(_read(8))
+    elf_header["e_flags"] = strtoint(_read(4))
+    elf_header["e_ehsize"] = strtoint(_read(2))
+    elf_header["e_phentsize"] = strtoint(_read(2))
+    elf_header["e_phnum"] = strtoint(_read(2))
+    elf_header["e_shentsize"] = strtoint(_read(2))
+    elf_header["e_shnum"] = strtoint(_read(2))
+    elf_header["e_shstrndx"] = strtoint(_read(2))
 
 def read_section_header(buffer):
     elf_header = elf["elf_header"]
@@ -296,16 +297,16 @@ def read_section_header(buffer):
     e_shentsize = elf_header["e_shentsize"] 
     for num in range(e_shnum):    
         sections.append({
-            "name": strtoint(buffer.read(4)),
-            "type": strtoint(buffer.read(4)),
-            "flag": strtoint(buffer.read(8)),
-            "addr": strtoint(buffer.read(8)),
-            "offset": strtoint(buffer.read(8)),
-            "size": strtoint(buffer.read(8)),
-            "link": strtoint(buffer.read(4)),
-            "info": strtoint(buffer.read(4)),
-            "align": strtoint(buffer.read(8)),
-            "entsize": strtoint(buffer.read(8))
+            "name": strtoint(_read(4)),
+            "type": strtoint(_read(4)),
+            "flag": strtoint(_read(8)),
+            "addr": strtoint(_read(8)),
+            "offset": strtoint(_read(8)),
+            "size": strtoint(_read(8)),
+            "link": strtoint(_read(4)),
+            "info": strtoint(_read(4)),
+            "align": strtoint(_read(8)),
+            "entsize": strtoint(_read(8))
         })
 
 
@@ -317,20 +318,20 @@ def read_program_header(buffer):
     e_phentsize = elf_header["e_phentsize"]
     for num in range(e_phnum):
         entry = {
-            "type": strtoint(buffer.read(4)),
-            "flag": strtoint(buffer.read(4)),
-            "offset": strtoint(buffer.read(8)),
-            "virt": strtoint(buffer.read(8)),
-            "phys": strtoint(buffer.read(8)),
-            "filesize": strtoint(buffer.read(8)),
-            "memsize": strtoint(buffer.read(8)),
-            "align": strtoint(buffer.read(8))
+            "type": strtoint(_read(4)),
+            "flag": strtoint(_read(4)),
+            "offset": strtoint(_read(8)),
+            "virt": strtoint(_read(8)),
+            "phys": strtoint(_read(8)),
+            "filesize": strtoint(_read(8)),
+            "memsize": strtoint(_read(8)),
+            "align": strtoint(_read(8))
             }
         #INTERP
         if entry['type'] == 3:
             mark = buffer.tell() 
             buffer.seek(entry['offset'])
-            elf['interpreter'] = buffer.read(entry['filesize']) 
+            elf['interpreter'] = _read(entry['filesize']) 
             buffer.seek(mark)
         programs.append(entry)
 
@@ -338,7 +339,7 @@ def read_program_header(buffer):
 def build_strtab(buffer, section):
     buffer.seek(section["offset"])        
     size = section["size"]
-    strtabdata = buffer.read(size) 
+    strtabdata = _read(size) 
     strtab = {}
     j = 0
     while j < size:
@@ -374,7 +375,7 @@ def read_strtab(buffer):
     shstrtab_section = None
     for section in strtab_sections:
         buffer.seek(section["offset"])
-        if ".text" in buffer.read(section["size"]):
+        if ".text" in _read(section["size"]):
             shstrtab_section = section 
     if not shstrtab_section:
         print "error: where is .shstrtab?"
@@ -403,18 +404,18 @@ def read_symtab(buffer):
         total = section["size"] / section["entsize"]
         symtab = []
         for entry in range(total): 
-            name = strtoint(buffer.read(4))
-            info = strtoint(buffer.read(1))
+            name = strtoint(_read(4))
+            info = strtoint(_read(1))
             _bind = info >> 4
             _type = info & 0xf
             symtab.append({
                 "name": name,
                 "bind": _bind,
                 "type": _type,
-                "vis": strtoint(buffer.read(1)),
-                "index": strtoint(buffer.read(2)),
-                "value": strtoint(buffer.read(8)),
-                "size": strtoint(buffer.read(8))
+                "vis": strtoint(_read(1)),
+                "index": strtoint(_read(2)),
+                "value": strtoint(_read(8)),
+                "size": strtoint(_read(8))
                 })
         symtabs[section["name"]] = symtab                     
     if ".symtab" in elf["symtabs"]:
@@ -443,8 +444,8 @@ def read_dynamic(buffer):
     buffer.seek(dynamic["offset"])
     total = dynamic["size"] / dynamic["entsize"] 
     for entry in range(total):
-        d_tag = strtoint(buffer.read(8))
-        value = strtoint(buffer.read(8)) 
+        d_tag = strtoint(_read(8))
+        value = strtoint(_read(8)) 
         dynamic_list.append({d_tag: value})    
         if not d_tag:
             break
@@ -466,6 +467,7 @@ def read_dynamic(buffer):
 
 def set_target(path):
     global elf 
+    global _read
     elf = {
         "elf_header": {},
         "sections": [],
@@ -479,6 +481,7 @@ def set_target(path):
     with open(path, "r") as binfile: 
         buffer.write(binfile.read())
     buffer.seek(0)
+    _read = buffer.read
     read_header(buffer) 
     read_section_header(buffer)
     read_program_header(buffer)
