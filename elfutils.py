@@ -230,7 +230,6 @@ sym_vis_type = {
         3: "STV_PROTECTED"
         }
 
-
 def read_header(buffer):
     buffer.seek(0)
     elf_header = elf['elf_header']
@@ -392,7 +391,7 @@ def read_symtab(buffer):
                     symbol["name"] = "unknown"
 
 def read_rela(buffer):
-    pass
+    sections = elf["sections"] 
 
 def read_dynamic(buffer): 
     sections = elf["sections"]
@@ -426,7 +425,7 @@ def read_dynamic(buffer):
                 name = dyntab[entry[d_tag]]
             entry[d_tag] = name 
 
-def set_target(binfile):
+def set_target(path):
     global elf 
     elf = {
         "elf_header": {},
@@ -437,12 +436,13 @@ def set_target(binfile):
         "dynamic": []
         } 
     buffer = cStringIO.StringIO()
-    buffer.write(binfile.read())
+    with open(path, "r") as binfile: 
+        buffer.write(binfile.read())
     buffer.seek(0)
     read_header(buffer) 
     read_section_header(buffer)
     read_program_header(buffer)
     read_strtab(buffer) 
     read_symtab(buffer) 
-    read_dynamic(buffer)
+    read_dynamic(buffer) 
     return elf
