@@ -1,8 +1,19 @@
 import cStringIO
+import os
 from baseutils import strtoint
 
 elf = None
 _read = None
+
+def print_mem_usage(position):
+    Mib = 1024
+    pagesize = 4
+    f = open("/proc/%d/statm" % os.getpid(), "r")
+    mems = f.read().split(" ")
+    print "in", position    
+    print "VM: %dm PHYM: %dm" % (int(mems[0]) * pagesize / Mib,
+            int(mems[1]) * pagesize / Mib)              
+    f.close()
 
 section_header = {
         "index": 0,
@@ -404,32 +415,32 @@ def read_symtab(buffer):
         total = section["size"] / section["entsize"]
         symtab = []
         for entry in range(total): 
-            name = strtoint(_read(4))
-            info = strtoint(_read(1))
-            _bind = info >> 4
-            _type = info & 0xf
-            symtab.append({
-                "name": name,
-                "bind": _bind,
-                "type": _type,
-                "vis": strtoint(_read(1)),
-                "index": strtoint(_read(2)),
-                "value": strtoint(_read(8)),
-                "size": strtoint(_read(8))
-                })
+            sym_name = strtoint(_read(4))
+            info = strtoint(_read(1)) 
+            #name ,bind , type, vis, index, value, size
+            symtab.append([sym_name, info >> 4,  info & 0xf,
+                strtoint(_read(1)), 
+                strtoint(_read(2)), 
+                strtoint(_read(8)), 
+                strtoint(_read(8))
+                ])
         symtabs[section["name"]] = symtab                     
+
     if ".symtab" in elf["symtabs"]:
         strtab = elf["strtabs"][".strtab"]
-        for symbol in elf["symtabs"][".symtab"]:
-            if symbol["name"]:
-                symbol["name"] = strtab[symbol["name"]] 
+        for symbol in elf["symtabs"][".symtab"]: 
+            name = symbol[0] 
+            if name in strtab:
+                symbol[0] = strtab[name]
+            else:
+                symbol[0] = "unknown"
         dynsym = elf["strtabs"][".dynstr"]
-        for symbol in elf["symtabs"][".dynsym"]:
-            if symbol["name"]:
-                try:
-                    symbol["name"] = dynsym[symbol["name"]]
-                except:
-                    symbol["name"] = "unknown"
+        for symbol in elf["symtabs"][".dynsym"]: 
+            name = symbol[0] 
+            if name in dynsym:
+                symbol[0] = dynsym[name]
+            else:
+                symbol[0] = "unknown"
 
 def read_rela(buffer):
     sections = elf["sections"] 
@@ -457,12 +468,13 @@ def read_dynamic(buffer):
         if d_tag in in_symtab:
             if not d_tag:
                 continue
-            if not entry[d_tag]:
+            value = entry[d_tag]
+            if not value:
                 continue 
-            try:
-                name = strtab[entry[d_tag]]
-            except:
-                name = dyntab[entry[d_tag]]
+            if value in strtab:
+                name = strtab[value]
+            elif value in dyntab:
+                name = dyntab[value]
             entry[d_tag] = name 
 
 def set_target(path):
@@ -477,15 +489,16 @@ def set_target(path):
         "symtabs": {},
         "dynamic": []
         } 
-    buffer = cStringIO.StringIO()
-    with open(path, "r") as binfile: 
-        buffer.write(binfile.read())
-    buffer.seek(0)
+    buffer = open(path, "r") 
     _read = buffer.read
     read_header(buffer) 
     read_section_header(buffer)
     read_program_header(buffer)
+    print_mem_usage("after headers")
     read_strtab(buffer) 
+    print_mem_usage("after strtab")
     read_symtab(buffer) 
+    print_mem_usage("after symtab")
     read_dynamic(buffer) 
+    buffer.close()
     return elf

@@ -30,15 +30,19 @@ def print_dynamic(elf):
 def print_symbol(elf):
     symtabs = elf["symtabs"]
     of = "{:<15}{:<10}{:<10}{:<10}{:<20}"
+    NAME, BIND, TYPE, VIS, INDEX, VALUE, SIZE = range(7)
+    type_table = elfutils.sym_type 
+    bind_type_table = elfutils.sym_bind_type
+    vis_type_table = elfutils.sym_vis_type
     for symtab in symtabs:
         print "in", symtab
         print of.format("addr", "type", "visiblity", "bind", "name")
         for symbol in symtabs[symtab]:
-            value = hex(symbol["value"])
-            name = symbol["name"]
-            sym_type = elfutils.sym_type[symbol["type"]].split("_")[-1]
-            bind_type = elfutils.sym_bind_type[symbol["bind"]].split("_")[-1] 
-            vis_type =  elfutils.sym_vis_type[symbol["vis"]].split("_")[-1] 
+            value = hex(symbol[VALUE])
+            name = symbol[NAME]
+            sym_type = type_table[symbol[TYPE]].split("_")[-1]
+            bind_type = bind_type_table[symbol[BIND]].split("_")[-1] 
+            vis_type =  vis_type_table[symbol[VIS]].split("_")[-1] 
             print of.format(value, sym_type, vis_type, bind_type, name)
         print "\n"
 
