@@ -1,5 +1,5 @@
-import cStringIO
 import os
+import mmap 
 from baseutils import strtoint
 
 elf = None
@@ -256,7 +256,8 @@ sym_type = {
 sym_bind_type = {
         0: "STB_LOCAL", 
         1: "STB_GLOBAL",
-        2: "STB_WEAK"
+        2: "STB_WEAK",
+        -6: "STB_UNIQUE"
         } 
 
 sym_spec_index = {
@@ -347,22 +348,24 @@ def read_program_header(buffer):
         programs.append(entry)
 
 
-def build_strtab(buffer, section):
+def build_strtab(buffer, section): 
     buffer.seek(section["offset"])        
-    size = section["size"]
+    size = section["size"] 
     strtabdata = _read(size) 
     strtab = {}
     j = 0
+    strend = "\x00"
     while j < size:
-        if strtabdata[j] == "\x00":
-            end = strtabdata.find("\x00", j+1) 
-            if end == -1:
+        if strtabdata[j] == strend:
+            k = j + 1
+            end = strtabdata.find(strend, k) 
+            if end == -1: 
                 break
-            name = strtabdata[j+1:end]
+            name = strtabdata[k:end]
             more = name.find(".", 1)
             if more > 0: 
-                strtab[j+more+1] = name[more:]
-            strtab[j+1] = name 
+                strtab[k+more] = name[more:]
+            strtab[k] = name 
             j = end
             continue
         j += 1 
@@ -395,52 +398,53 @@ def read_strtab(buffer):
     for section in sections[1:]:
         section["name"] = shstrtab[section["name"]]
     for section in strtab_sections:    
-        if section["name"] == ".shstrtab":
+        name = section["name"]
+        if name == ".shstrtab":
             continue
         strtab = build_strtab(buffer, section)
-        elf["strtabs"][section["name"]] = strtab
+        elf["strtabs"][name] = strtab
 
-def read_symtab(buffer):
+def read_symtab(buffer): 
     sections = elf["sections"]
     symtabs = elf["symtabs"]
-    symtab_sections = []
+    symtab_sections = [] 
+    strtab = elf["strtabs"][".strtab"]
+    dynsym = elf["strtabs"][".dynstr"]
     for section in sections:
         if section["type"] == 2:
             symtab_sections.append(section) 
         if section["type"] == 11:
             symtab_sections.append(section)
     for section in symtab_sections: 
-        buffer.seek(section["offset"])
+        flag = 0
+        if section["name"] == ".symtab":
+            flag = 1
+        elif section["name"] == ".dynsym":
+            flag = 2
+        buffer.seek(section["offset"]) 
+        sym_read = buffer.read 
         extra = section["align"] - (section["entsize"] / section["align"]) 
         total = section["size"] / section["entsize"]
         symtab = []
+        symtab_append = symtab.append 
         for entry in range(total): 
-            sym_name = strtoint(_read(4))
-            info = strtoint(_read(1)) 
+            sym_name = strtoint(sym_read(4)) 
+            if not sym_name:
+                sym_name = "unknown"
+            elif flag == 1:
+                sym_name = strtab[sym_name]
+            elif not flag == 2:
+                sym_name = dynsym[sym_name]
+            info = strtoint(sym_read(1)) 
             #name ,bind , type, vis, index, value, size
-            symtab.append([sym_name, info >> 4,  info & 0xf,
-                strtoint(_read(1)), 
-                strtoint(_read(2)), 
-                strtoint(_read(8)), 
-                strtoint(_read(8))
-                ])
+            symtab_append((sym_name, info >> 4,  info & 0xf,
+                strtoint(sym_read(1)), 
+                strtoint(sym_read(2)), 
+                strtoint(sym_read(8)), 
+                strtoint(sym_read(8))
+                ))
         symtabs[section["name"]] = symtab                     
-
-    if ".symtab" in elf["symtabs"]:
-        strtab = elf["strtabs"][".strtab"]
-        for symbol in elf["symtabs"][".symtab"]: 
-            name = symbol[0] 
-            if name in strtab:
-                symbol[0] = strtab[name]
-            else:
-                symbol[0] = "unknown"
-        dynsym = elf["strtabs"][".dynstr"]
-        for symbol in elf["symtabs"][".dynsym"]: 
-            name = symbol[0] 
-            if name in dynsym:
-                symbol[0] = dynsym[name]
-            else:
-                symbol[0] = "unknown"
+        #sym_data.close() 
 
 def read_rela(buffer):
     sections = elf["sections"] 
@@ -489,16 +493,18 @@ def set_target(path):
         "symtabs": {},
         "dynamic": []
         } 
-    buffer = open(path, "r") 
+    f = open(path, "r+b")
+    buffer = mmap.mmap(f.fileno(), 0, mmap.MAP_PRIVATE, mmap.PROT_READ)
     _read = buffer.read
     read_header(buffer) 
     read_section_header(buffer)
     read_program_header(buffer)
-    print_mem_usage("after headers")
+    #print_mem_usage("after headers")
     read_strtab(buffer) 
-    print_mem_usage("after strtab")
+    #print_mem_usage("after strtab")
     read_symtab(buffer) 
-    print_mem_usage("after symtab")
+    #print_mem_usage("after symtab")
     read_dynamic(buffer) 
     buffer.close()
+    f.close()
     return elf

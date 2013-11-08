@@ -3,6 +3,7 @@ import sys
 import getopt
 import os.path
 import elfutils
+#import cProfile
 
 
 def print_usage():
@@ -61,7 +62,7 @@ def print_pheader(elf):
         align = hex(entry['align'])
         print of.format(ptype, align, offset, virt, phys, filesize, memsize, flag)
     if elf['interpreter']:
-        print "interpreter: ", elf['interpreter']
+        print "INTERP: ", elf['interpreter']
     print "\n"
 
 def print_sheader(elf):
@@ -133,8 +134,10 @@ def main():
         elif o == "-S":
             sheader = True 
         else:
-            assert False, "unhandled options"
-    elf = elfutils.set_target(path)    
+            assert False, "unhandled options" 
+    #cProfile.runctx("elfutils.set_target(path)", globals(), locals(), "readelf.trace")    
+    elf = elfutils.set_target(path)
+
     if dynamic:
         print_dynamic(elf)
     if header:
