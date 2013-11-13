@@ -1,5 +1,7 @@
 import os
 import mmap 
+import pdb
+from cStringIO import StringIO
 from baseutils import strtoint
 
 elf = None
@@ -14,6 +16,12 @@ def print_mem_usage(position):
     print "VM: %dm PHYM: %dm" % (int(mems[0]) * pagesize / Mib,
             int(mems[1]) * pagesize / Mib)              
     f.close()
+
+#options 
+ELF_HEADER = 1 << 2
+ELF_SYMBOL = 1 << 3
+ELF_DYNAMIC = 1 << 4
+DWARF_INFO = 1 << 5
 
 section_header = {
         "index": 0,
@@ -388,6 +396,71 @@ DW_TAG_template_alias = 0x43
 DW_TAG_lo_user = 0x4080
 DW_TAG_hi_user = 0xffff
 
+TAG_types = {
+        0x01: "DW_TAG_array_type",
+        0x02: "DW_TAG_class_type",
+        0x03: "DW_TAG_entry_point",
+        0x04: "DW_TAG_enumeration_type",
+        0x05: "DW_TAG_formal_parameter",
+        0x08: "DW_TAG_imported_declaration",
+        0x0a: "DW_TAG_label",
+        0x0b: "DW_TAG_lexical_block",
+        0x0d: "DW_TAG_member",
+        0x0f: "DW_TAG_pointer_type",
+        0x10: "DW_TAG_reference_type",
+        0x11: "DW_TAG_compile_unit",
+        0x12: "DW_TAG_string_type",
+        0x13: "DW_TAG_structure_type",
+        0x15: "DW_TAG_subroutine_type",
+        0x16: "DW_TAG_typedef",
+        0x17: "DW_TAG_union_type",
+        0x18: "DW_TAG_unspecified_parameters",
+        0x19: "DW_TAG_variant",
+        0x1a: "DW_TAG_common_block",
+        0x1b: "DW_TAG_common_inclusion",
+        0x1c: "DW_TAG_inheritance",
+        0x1d: "DW_TAG_inlined_subroutine",
+        0x1e: "DW_TAG_module",
+        0x1f: "DW_TAG_ptr_to_member_type",
+        0x20: "DW_TAG_set_type",
+        0x21: "DW_TAG_subrange_type",
+        0x22: "DW_TAG_with_stmt",
+        0x23: "DW_TAG_access_declaration",
+        0x24: "DW_TAG_base_type",
+        0x25: "DW_TAG_catch_block",
+        0x26: "DW_TAG_const_type",
+        0x27: "DW_TAG_constant",
+        0x28: "DW_TAG_enumerator",
+        0x29: "DW_TAG_file_type",
+        0x2a: "DW_TAG_friend",
+        0x2b: "DW_TAG_namelist",
+        0x2c: "DW_TAG_namelist_item",
+        0x2d: "DW_TAG_packed_type",
+        0x2e: "DW_TAG_subprogram",
+        0x2f: "DW_TAG_template_type_parameter",
+        0x30: "DW_TAG_template_value_parameter",
+        0x31: "DW_TAG_thrown_type",
+        0x32: "DW_TAG_try_block",
+        0x33: "DW_TAG_variant_part",
+        0x34: "DW_TAG_variable",
+        0x35: "DW_TAG_volatile_type",
+        0x36: "DW_TAG_dwarf_procedure",
+        0x37: "DW_TAG_restrict_type",
+        0x38: "DW_TAG_interface_type",
+        0x39: "DW_TAG_namespace",
+        0x3a: "DW_TAG_imported_module",
+        0x3b: "DW_TAG_unspecified_type",
+        0x3c: "DW_TAG__partial_unit",
+        0x3d: "DW_TAG_imported_unit",
+        0x3f: "DW_TAG_condition",
+        0x40: "DW_TAG_shared_type",
+        0x41: "DW_TAG_type_unit",
+        0x42: "DW_TAG_type_rvalue_reference_type",
+        0x43: "DW_TAG_template_alias",
+        0x4080: "DW_TAG_lo_user",
+        0xffff: "DW_TAG_hi_user"
+        }
+
 #has children ?
 DW_CHILDREN_no = 0x00
 DW_CHILDREN_yes = 0x01
@@ -487,32 +560,255 @@ DW_AT_linkage_name = 0x6e
 DW_AT_lo_user = 0x2000
 DW_AT_hi_user = 0x3fff
 
+AT_types = {
+        0x01: "DW_AT_sibling",
+        0x02: "DW_AT_location",
+        0x03: "DW_AT_name",
+        0x09: "DW_AT_ordering",
+        0x0b: "DW_AT_byte_size",
+        0x0c: "DW_AT_bit_offset",
+        0x0d: "DW_AT_bit_size",
+        0x10: "DW_AT_stmt_list",
+        0x11: "DW_AT_low_pc",
+        0x12: "DW_AT_high_pc",
+        0x13: "DW_AT_language",
+        0x15: "DW_AT_discr",
+        0x16: "DW_AT_discr_value",
+        0x17: "DW_AT_visibility",
+        0x18: "DW_AT_import",
+        0x19: "DW_AT_string_length",
+        0x1a: "DW_AT_common_reference",
+        0x1b: "DW_AT_comp_dir",
+        0x1c: "DW_AT_const_value",
+        0x1d: "DW_AT_containing_type",
+        0x1e: "DW_AT_default_value",
+        0x20: "DW_AT_inline",
+        0x21: "DW_AT_is_optional",
+        0x22: "DW_AT_lower_bound",
+        0x25: "DW_AT_producer",
+        0x27: "DW_AT_prototyped",
+        0x2a: "DW_AT_return_addr",
+        0x2c: "DW_AT_start_scope",
+        0x2e: "DW_AT_bit_stride",
+        0x2f: "DW_AT_upper_bound",
+        0x31: "DW_AT_abstract_origin",
+        0x32: "DW_AT_accessibility",
+        0x33: "DW_AT_address_class",
+        0x34: "DW_AT_artificial",
+        0x35: "DW_AT_base_types",
+        0x36: "DW_AT_calling_convention",
+        0x37: "DW_AT_count",
+        0x38: "DW_AT_data_member_location",
+        0x39: "DW_AT_decl_column",
+        0x3a: "DW_AT_decl_file",
+        0x3b: "DW_AT_decl_line",
+        0x3c: "DW_AT_declaration",
+        0x3d: "DW_AT_discr_list",
+        0x3e: "DW_AT_encoding",
+        0x3f: "DW_AT_external",
+        0x40: "DW_AT_frame_base",
+        0x41: "DW_AT_friend",
+        0x42: "DW_AT_identifier_case",
+        0x43: "DW_AT_macro_info",
+        0x44: "DW_AT_namelist_item",
+        0x45: "DW_AT_priority",
+        0x46: "DW_AT_segment",
+        0x47: "DW_AT_specification",
+        0x48: "DW_AT_static_link",
+        0x49: "DW_AT_type",
+        0x4a: "DW_AT_use_location",
+        0x4c: "DW_AT_virtuality",
+        0x4d: "DW_AT_vtable_elem_location",
+        0x4e: "DW_AT_allocated",
+        0x4f: "DW_AT_associated",
+        0x50: "DW_AT_data_location",
+        0x51: "DW_AT_byte_stride",
+        0x52: "DW_AT_entry_pc",
+        0x53: "DW_AT_use_UTF8",
+        0x54: "DW_AT_extension",
+        0x55: "DW_AT_ranges",
+        0x56: "DW_AT_trampoline",
+        0x57: "DW_AT_call_column",
+        0x58: "DW_AT_call_file",
+        0x59: "DW_AT_call_line",
+        0x5a: "DW_AT_description",
+        0x5b: "DW_AT_binary_scale",
+        0x5c: "DW_AT_decimal_scale",
+        0x5d: "DW_AT_small",
+        0x5e: "DW_AT_decimal_sign",
+        0x5f: "DW_AT_digit_count",
+        0x60: "DW_AT_picture_string",
+        0x61: "DW_AT_mutable",
+        0x62: "DW_AT_threads_scaled",
+        0x63: "DW_AT_explicit",
+        0x64: "DW_AT_object_pointer",
+        0x65: "DW_AT_endiantity",
+        0x66: "DW_AT_elemental",
+        0x67: "DW_AT_pure",
+        0x68: "DW_AT_recursive",
+        0x69: "DW_AT_signature",
+        0x6a: "DW_AT_main_subprogram",
+        0x6b: "DW_AT_data_bit_offset",
+        0x6c: "DW_AT_const_expr",
+        0x6d: "DW_AT_enum_class",
+        0x6e: "DW_AT_linkage_name",
+        0x2000: "DW_AT_lo_user",
+        0x3fff: "DW_AT_hi_user"
+        }
 #format
-DW_FORM_addr = 0x01
+#8c machine addr
+DW_FORM_addr = 0x01 
+#2c
 DW_FORM_block2 = 0x03
+#4c
 DW_FORM_block4 = 0x04
+#2c
 DW_FORM_data2 = 0x05
+#4c
 DW_FORM_data4 = 0x06
+#8c
 DW_FORM_data8 = 0x07
+#c_str
 DW_FORM_string = 0x08
+#unsigned LEB
 DW_FORM_block = 0x09
+#1c
 DW_FORM_block1 = 0x0a
+#1c
 DW_FORM_data1 = 0x0b
+#1c
 DW_FORM_flag = 0x0c
+#signed LEB
 DW_FORM_sdata = 0x0d
+#offset in .debug_str, 4c 32, 8c 64
 DW_FORM_strp = 0x0e
+#unsigned LEB
 DW_FORM_udata = 0x0f
+#offset in .debug_info
 DW_FORM_ref_addr = 0x10
+#1c
 DW_FORM_ref1 = 0x11
+#2c
 DW_FORM_ref2 = 0x12
+#4c
 DW_FORM_ref4 = 0x13
+#8c
 DW_FORM_ref8 = 0x14
+#unsigned LEB
 DW_FORM_ref_udata = 0x15
+#unsigned LEB
 DW_FORM_indirect = 0x16
+#4c 32, 8c 64
 DW_FORM_sec_offset = 0x17
+#unsigned LEB
 DW_FORM_exprloc = 0x18
+#1c
 DW_FORM_flag_present = 0x19
+#8c signature
 DW_FORM_ref_sig8 = 0x20
+
+FORM_types =  {
+        0x01: "DW_FORM_addr",
+        0x03: "DW_FORM_block2",
+        0x04: "DW_FORM_block4",
+        0x05: "DW_FORM_data2",
+        0x06: "DW_FORM_data4",
+        0x07: "DW_FORM_data8",
+        0x08: "DW_FORM_string",
+        0x09: "DW_FORM_block",
+        0x0a: "DW_FORM_block1",
+        0x0b: "DW_FORM_data1",
+        0x0c: "DW_FORM_flag",
+        0x0d: "DW_FORM_sdata",
+        0x0e: "DW_FORM_strp",
+        0x0f: "DW_FORM_udata",
+        0x10: "DW_FORM_ref_addr",
+        0x11: "DW_FORM_ref1",
+        0x12: "DW_FORM_ref2",
+        0x13: "DW_FORM_ref4",
+        0x14: "DW_FORM_ref8",
+        0x15: "DW_FORM_ref_udata",
+        0x16: "DW_FORM_indirect",
+        0x17: "DW_FORM_sec_offset",
+        0x18: "DW_FORM_exprloc",
+        0x19: "DW_FORM_flag_present",
+        0x20: "DW_FORM_ref_sig8"
+        }
+
+attr_form_to_len = {
+        0x01: 8,
+        0x03: 2,
+        0x04: 4,
+        0x05: 2,
+        0x06: 4,
+        0x07: 8,
+        0x08: 0xfff1,  #str
+        0x09: 0xfff2,  #uleb
+        0x0a: 1,
+        0x0b: 1,
+        0x0c: 1,
+        0x0d: 0xfff3,  #sleb
+        0x0e: 4,
+        0x0f: 0xfff2,
+        0x10: 4,
+        0x11: 1,
+        0x12: 2,
+        0x13: 4,
+        0x14: 8,
+        0x15: 0xfff2,
+        0x16: 0xfff2,
+        0x17: 4,
+        0x18: 0xfff2,
+        0x19: 1,
+        0x20: 8 
+        }
+
+#.debug_line standard ops
+DW_LNS_copy = 0x01
+DW_LNS_advance_pc = 0x02
+DW_LNS_advance_line = 0x03
+DW_LNS_set_file = 0x04
+DW_LNS_set_column = 0x05
+DW_LNS_negate_stmt = 0x06
+DW_LNS_set_basic_block = 0x07
+DW_LNS_const_add_pc = 0x08
+DW_LNS_fixed_advance_pc = 0x09
+DW_LNS_set_prologue_end = 0x0a
+DW_LNS_set_epilogue_begin = 0x0b
+DW_LNS_set_isa = 0x0c
+
+LINE_STD_ops = {
+        0x01: "DW_LNS_copy",
+        0x02: "DW_LNS_advance_pc",
+        0x03: "DW_LNS_advance_line",
+        0x04: "DW_LNS_set_file",
+        0x05: "DW_LNS_set_column",
+        0x06: "DW_LNS_negate_stmt",
+        0x07: "DW_LNS_set_basic_block",
+        0x08: "DW_LNS_const_add_pc",
+        0x09: "DW_LNS_fixed_advance_pc",
+        0x0a: "DW_LNS_set_prologue_end",
+        0x0b: "DW_LNS_set_epilogue_begin",
+        0x0c : "DW_LNS_set_isa"
+        }
+
+
+#.debug_line ext ops
+DW_LINE_end_sequence = 0x01
+DW_LINE_set_address = 0x02
+DW_LINE_define_file = 0x03
+DW_LINE_set_discriminator = 0x04
+DW_LINE_lo_user = 0x80
+DW_LINE_hi_user = 0xff
+
+LINE_EXT_ops = {
+        0x01: "DW_LINE_end_sequence",
+        0x02: "DW_LINE_set_address",
+        0x03: "DW_LINE_define_file",
+        0x04: "DW_LINE_set_discriminator",
+        0x80: "DW_LINE_lo_user",
+        0xff: "DW_LINE_hi_user"
+        }
 
 def read_header(buffer):
     buffer.seek(0)
@@ -660,7 +956,7 @@ def read_symtab(buffer):
         elif section["name"] == ".dynsym":
             flag = 2
         buffer.seek(section["offset"]) 
-        sym_read = buffer.read 
+        sym_read = _read 
         extra = section["align"] - (section["entsize"] / section["align"]) 
         total = section["size"] / section["entsize"]
         symtab = []
@@ -720,23 +1016,245 @@ def read_dynamic(buffer):
             entry[d_tag] = name 
 
 
-def read_debugabbr(buffer):
-    sections = elf["sections"]
-    debug_abbrev = ".debug_abbrev"
-    if debug_abbrev not in sections:
-        assert False, "where is the section .debug_abbrev" 
-    debug_abbrev = sections[".debug_abbrev"]
-    buffer.seek(debug_abbrev["offset"])
-
 def read_debuginfo(buffer):
     sections = elf["sections"]
-    debug_info = ".debug_info"
-    if debug_info not in sections:
-        assert False, "where is the section .debug_info?"
-    debug_info = sections["debug_info"]
+    debug_info = ".debug_info" 
+    debug_abbrev = ".debug_abbrev"
+    debug_str = ".debug_str"
+    debug_line = ".debug_line"
+    exist = 0
+    for section in sections:
+        name = section["name"]
+        if name == debug_info:
+            exist += 1
+            debug_info = section 
+        elif name == debug_abbrev:
+            exist += 4
+            debug_abbrev = section
+        elif name == debug_str: 
+            debug_str = section
+        elif name == debug_line:        
+            debug_line = section
+    if exist == 0:
+        assert False, "where is section .debug_abbrev and .debug_info?"
+    elif exist == 1:
+        assert False, "where is section .debug_abbrev" 
+    elif exist == 4:
+        assert False, "where is section .debug_info" 
     buffer.seek(debug_info["offset"])
+    cu_addrs = []
+    section_end = debug_info["offset"] + debug_info["size"] 
+    while True:
+        cur = buffer.tell()
+        if cur >= section_end: 
+            break
+        cu_addrs.append(cur) 
+        buffer.seek(strtoint(_read(4)), 1) 
+    cus = []
+    for cu_addr in cu_addrs:    
+        buffer.seek(cu_addr) 
+        unit_length = strtoint(_read(4))
+        version = strtoint(_read(2))
+        abbrev_offset = strtoint(_read(4))
+        addr_size = strtoint(_read(1))
+        abbr_num = strtoint(_read(1))
+        cus.append({
+            "length": unit_length,
+            "version": version,
+            "abbrev_offset": abbrev_offset,
+            "addr_size": addr_size,
+            "abbr_num": abbr_num,
+            "data_formats": [],
+            "data_offset": buffer.tell(),
+            "data": {},
+            }) 
+    for cu in cus:
+        buffer.seek(cu["abbrev_offset"]+debug_abbrev["offset"]) 
+        buffer.seek(3, 1)
+        while True:        
+            attr_type = strtoint(_read(1))
+            attr_form = strtoint(_read(1))
+            if not attr_type:
+                break
+            print AT_types[attr_type], FORM_types[attr_form] 
+            cu["data_formats"].append((attr_type, attr_form)) 
+    found_str = False
+    strtab = None
+    if not isinstance(debug_str, str):
+        strtab = build_strtab(buffer, debug_str)        
+        found_str = True
+    for cu in cus:
+        buffer.seek(cu["data_offset"])
+        formats = cu["data_formats"]
+        for df in formats:
+            length = attr_form_to_len[df[1]] 
+            value = None 
+            if length < 0xfff1:
+                value = strtoint(_read(length)) 
+            elif length == 0xfff1:
+                strbuffer = StringIO()
+                while True:
+                    c = _read(1)
+                    if c=="\x00":
+                        break
+                    strbuffer.write(c) 
+                value = strbuffer.getvalue()
+                strbuffer.close()
+            elif length == 0xfff2:
+                value = strtoint(_read(8))
+            elif length == 0xfff3:
+                value = strtoint(_read(8))
+            if df[0] == 0x03:
+                if found_str and (df[1] == 0x0e):
+                    value = strtab[value]
+            cu["data"][df[0]] = value 
+        print cu
+        if 0x10 in cu["data"]: 
+            read_debugline(buffer, debug_line["offset"], cu)
+    elf["compile_units"] = cus        
+
+
+def read_debugline(buffer,debugline_offset, cu):
+    buffer.seek(debugline_offset)
+    buffer.seek(cu["data"][0x10], 1) 
+    print hex(buffer.tell())
+    unit_len = strtoint(_read(4)) 
+    version = strtoint(_read(2))
+    header_len = strtoint(_read(4))
+    mini_ins_len = strtoint(_read(1))
+    #max_op_per_ins =strtoint(_read(1))
+    default_is_stmt = strtoint(_read(1))
+    line_base = strtoint(_read(1))
+    line_range = strtoint(_read(1))
+    op_base = strtoint(_read(1))
+    opargs_array = []
+    opargs_array_len = op_base - 1
+    start = 1
+    while start <= opargs_array_len: 
+        opargs_array.append(strtoint(_read(1)))
+        start += 1        
+    str_buffer = StringIO()    
+    while True:
+        c = _read(1) 
+        if c == "\x00":
+            back = buffer.tell()
+            if _read(1) == "\x00":
+                break
+            else:
+                buffer.seek(back) 
+        str_buffer.write(c)
+    include_dirs = str_buffer.getvalue().split("\x00")
+    str_buffer.close()
+    file_names = []
+    str_buffer = StringIO() 
+    while True: 
+        dir_index = 0
+        mtime = 0
+        file_len = 0 
+        c = _read(1)
+        if c == "\x00":
+            dir_index = strtoint(_read(1)) 
+            mtime = strtoint(_read(1)) 
+            file_len = strtoint(_read(1)) 
+            file_names.append((str_buffer.getvalue(),
+                                dir_index,
+                                mtime,
+                                file_len))
+            str_buffer.truncate(0)
+            back = buffer.tell()
+            if _read(1) == "\x00":
+                break
+            else:
+                buffer.seek(back)
+            continue
+        str_buffer.write(c)
+    str_buffer.close()
+    #exec opcode
+    reg_address = 0
+    reg_line = 1
+    reg_op_index = 0
+    reg_file = 1
+    reg_row  = 0
+    is_stmt = default_is_stmt
+    reg_column = 0
+    reg_basic_block = False
+    reg_prologue_end = False
+    reg_epilogue_begin = False
+    reg_discriminator = 0 
+    reg_fixed = False
+    reg_ext_end = 0
+    oparg = 0 
+    pdb.set_trace()
+    while True:
+        op = strtoint(_read(1))     
+        print "special after op", hex(reg_address), reg_line
+        if op == DW_LNS_copy: 
+            if reg_ext_end == 0:
+                reg_ext_end += 1
+            #sequence end  \x01\x01
+            elif reg_ext_end == 1: 
+                pass
+            #op copy \x01
+            elif reg_ext_end != 1:
+                reg_row += 1
+                reg_discriminator = 0
+                reg_basic_block = False
+                reg_prologue_end = False
+                reg_epilogue_begin = False
+                reg_ext_end = 0 
+        if op > DW_LNS_set_isa:
+            #special ops
+            operation_advance = (op - op_base) / line_range
+            reg_address += mini_ins_len * (operation_advance + reg_op_index)
+            reg_op_index += operation_advance
+            reg_line += line_base + (op - op_base) % line_range 
+        elif op == DW_LNS_advance_pc: 
+            if reg_fixed:
+                reg_address += strtoint(_read(8))
+                reg_fixed = False
+            else:
+                reg_address += strtoint(_read(2)) 
+        elif op == DW_LNS_advance_line: 
+            reg_line += strtoint(_read(1)) 
+        elif op == DW_LNS_set_file:
+            reg_file = strtoint(_read(1))
+        elif op == DW_LNS_set_column:
+            reg_column = strtoint(_read(1))
+        elif op == DW_LNS_negate_stmt:
+            is_stmt = not is_stmt 
+        elif op == DW_LNS_set_basic_block:
+            reg_basic_block = True
+        elif op == DW_LNS_const_add_pc:
+            reg_address += (255 - op_base) / line_range 
+        elif op == DW_LNS_fixed_advance_pc:
+            reg_fixed = True
+        elif op == DW_LINE_set_address:
+            reg_address = strtoint(_read(8)) 
+        elif op == DW_LINE_define_file:
+            pass
+        elif op == DW_LINE_end_sequence:
+            break 
+        
+def read_debugabbr(buffer):
+    sections = elf["sections"]
+    debug_abbr = ".debug_abbrev"
+    if debug_abbr not in sections:
+        assert False, "where is the section .debug_abbrev?"
+    debug_abbr = sections[".debug_abbrev"]
+    buffer.seek(debug_abbr["offset"])
  
-def set_target(path):
+def set_target(path, flags): 
+    if flags & ELF_HEADER:
+        pass
+    elif flags & ELF_SYMBOL:
+        flags |= ELF_HEADER
+    elif flags & ELF_DYNAMIC:
+        flags |= ELF_HEADER
+    elif flags & DWARF_INFO:
+        flags |= ELF_HEADER 
+        #flags |= ELF_SYMBOL
+    else:        
+        return None 
     global elf 
     global _read
     elf = {
@@ -746,20 +1264,26 @@ def set_target(path):
         "interpreter": "",
         "strtabs": {},
         "symtabs": {},
-        "dynamic": []
+        "dynamic": [],
+        "compile_units": []
         } 
     f = open(path, "r+b")
     buffer = mmap.mmap(f.fileno(), 0, mmap.MAP_PRIVATE, mmap.PROT_READ)
     _read = buffer.read
-    read_header(buffer) 
-    read_section_header(buffer)
-    read_program_header(buffer)
-    #print_mem_usage("after headers")
-    read_strtab(buffer) 
-    #print_mem_usage("after strtab")
-    read_symtab(buffer) 
-    #print_mem_usage("after symtab")
-    read_dynamic(buffer) 
+    if flags & ELF_HEADER:
+        read_header(buffer) 
+        read_section_header(buffer)
+        read_program_header(buffer)
+        #print_mem_usage("after headers")
+        read_strtab(buffer) 
+    if flags & ELF_SYMBOL: 
+        #print_mem_usage("after strtab")
+        read_symtab(buffer) 
+    if flags & ELF_DYNAMIC:
+        #print_mem_usage("after symtab")
+        read_dynamic(buffer) 
+    if flags & DWARF_INFO: 
+        read_debuginfo(buffer)
     buffer.close()
     f.close()
     return elf

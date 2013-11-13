@@ -1,3 +1,4 @@
+#! /usr/bin/env python
 import os
 import sys
 import getopt
@@ -104,9 +105,12 @@ def print_header(elf):
     print of.format("section entry number:", header['e_shnum'])
     print of.format("index of .strtab:", header['e_shstrndx'])
     
+def print_dwarf_info(elf):
+    pass
+
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dhlsS")
+        opts, args = getopt.getopt(sys.argv[1:], "dhlsSw:")
     except getopt.GetoptError, err:        
         print str(err)
         print_usage() 
@@ -120,6 +124,7 @@ def main():
     pheader = False
     sheader =False
     symbol = False 
+    dwarf_info = False
     for o, a in opts:
         if o == "--help":
             print_usage()
@@ -133,20 +138,30 @@ def main():
             symbol = True
         elif o == "-S":
             sheader = True 
+        elif o == "-w":
+            if a == "i":
+                dwarf_info = True 
         else:
             assert False, "unhandled options" 
     #cProfile.runctx("elfutils.set_target(path)", globals(), locals(), "readelf.trace")    
-    elf = elfutils.set_target(path)
-
     if dynamic:
+        elf = elfutils.set_target(path, elfutils.ELF_DYNAMIC)
         print_dynamic(elf)
-    if header:
+    if header: 
+        elf = elfutils.set_target(path, elfutils.ELF_HEADER)
         print_header(elf)
-    if pheader:
+    if pheader: 
+        elf = elfutils.set_target(path, elfutils.ELF_HEADER)
         print_pheader(elf)
-    if sheader:
+    if sheader: 
+        elf = elfutils.set_target(path, elfutils.ELF_HEADER)
         print_sheader(elf)
-    if symbol:
+    if symbol: 
+        elf = elfutils.set_target(path, elfutils.ELF_SYMBOL)
         print_symbol(elf)
+    if dwarf_info: 
+        elf = elfutils.set_target(path, elfutils.DWARF_INFO)
+        print_dwarf_info(elf)
+
 if __name__ == "__main__":
     main()
