@@ -1,7 +1,7 @@
-from baseutils import strtoint
+from baseutils import string_to_unsigned
 from struct import unpack
 
-src = [strtoint("\x7f"*i) for i in [2,4,8]]
+src = [string_to_unsigned("\x7f"*i) for i in [2,4,8]]
 dst = [ unpack("H", "\x7f"*2),
         unpack("I", "\x7f"*4),
         unpack("Q", "\x7f"*8)]

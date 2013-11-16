@@ -2,40 +2,19 @@ import os
 import mmap 
 import pdb
 from cStringIO import StringIO
-from baseutils import strtoint
-
+from baseutils import strtosint
+from baseutils import strtouint
 elf = None
 _read = None
-
-def print_mem_usage(position):
-    Mib = 1024
-    pagesize = 4
-    f = open("/proc/%d/statm" % os.getpid(), "r")
-    mems = f.read().split(" ")
-    print "in", position    
-    print "VM: %dm PHYM: %dm" % (int(mems[0]) * pagesize / Mib,
-            int(mems[1]) * pagesize / Mib)              
-    f.close()
 
 #options 
 ELF_HEADER = 1 << 2
 ELF_SYMBOL = 1 << 3
 ELF_DYNAMIC = 1 << 4
-DWARF_INFO = 1 << 5
+DWARF_INFO = 1 << 5 
 
-section_header = {
-        "index": 0,
-        "name": "",
-        "type": "",
-        "address": 0,
-        "offset": 0,
-        "size": 0,
-        "entsize": 0,
-        "flags": "",
-        "link": "",
-        "info": "",
-        "align": 0
-        }
+HIGHBITMASK = 0b1111111
+LOWBITSHIFT = 7
 
 elf_arch_type = {
         0: "EM_NONE",
@@ -117,17 +96,6 @@ def decide_shflags(flag):
         if flag & key:
             t.append(sh_flags[key])
     return "+".join(t)
-
-program_header = {
-        "type": "",
-        "offset": 0,
-        "virtaddr": 0,
-        "physaddr": 0,
-        "filesize": 0,
-        "memsize": 0,
-        "flags": "",
-        "align": 0
-        }
 
 ph_type = {
         0: "PT_NULL",
@@ -284,58 +252,10 @@ sym_vis_type = {
         3: "STV_PROTECTED"
         }
 
-#Tags
-DW_TAG_array_type = 0x01
-#DW_AT_name
-#DW_AT_type
-#DW_AT_bit_stride
-#DW_AT_bit_size
-#DW_AT_byte_size
-#DW_ORD_col_major
-#DW_ORD_row_major
-#child -> DW_TAG_subrange_type, DW_TAG_enumeration_type
-#DW_AT_allocated
-#DW_AT_associated
-#DW_AT_data_location 
-DW_TAG_class_type = 0x02
-DW_TAG_entry_point = 0x03
-#DW_AT_name
-#DW_AT_linkage_name
-#DW_AT_external
-#DW_AT_main_subprogram
-#DW_AT_calling_convention
-#-> DW_CC_normal, program, nocall
-#DW_AT_prototyped
-#DW_AT_elemental
-#DW_AT_recursive
-#DW_AT_pure
-#DW_AT_recursive 
-#DW_AT_type
-#DW_AT_low_pc
-#DW_AT_high_pc
-#DW_AT_ranges
-#DW_AT_entry_pc
-#DW_AT_start_scope
-#DW_AT_segment
-#DW_AT_location
-#DW_AT_address_class 
-#children -> DW_TAG_unspecified_parameters
-#children -> DW_TAG_common_inclusion -> DW_AT_common_reference
-#children -> DW_TAG_thrown_type
-#children -> DW_TAG_template_type_parameter
-#DW_AT_return_addr
-#DW_AT_frame_base
-#DW_AT_static_link
-#DW_AT_inline -> DW_INL_not_inlined, inlined, declared_not_inlined, declared_inlined
-#inined subroutine -> DW_AT_call_file 
-#inined subroutine -> DW_AT_call_line 
-#inined subroutine -> DW_AT_call_column 
-#inined subroutine -> DW_AT_const_value 
-#inined subroutine -> DW_AT_const_expr 
-#inined subroutine -> DW_AT_abstract_origin 
-#inined subroutine -> DW_AT_trampoline 
-#inined subroutine -> DW_AT_artificial
 
+DW_TAG_array_type = 0x01 
+DW_TAG_class_type = 0x02
+DW_TAG_entry_point = 0x03 
 DW_TAG_enumeration_type = 0x04
 DW_TAG_formal_parameter = 0x05
 DW_TAG_imported_declaration = 0x08
@@ -810,29 +730,38 @@ LINE_EXT_ops = {
         0xff: "DW_LINE_hi_user"
         }
 
+def print_mem_usage(position): 
+    Mib = 1024
+    pagesize = 4
+    f = open("/proc/%d/statm" % os.getpid(), "r")
+    mems = f.read().split(" ")
+    print "in", position    
+    print "VM: %dm PHYM: %dm" % (int(mems[0]) * pagesize / Mib,
+            int(mems[1]) * pagesize / Mib)              
+    f.close()
+
 def read_header(buffer):
     buffer.seek(0)
     elf_header = elf['elf_header']
     elf_header["file_ident"] = _read(4)
     assert elf_header["file_ident"] == "\x7fELF"
-    elf_header["file_class"] = strtoint(_read(1))
-    elf_header["file_encoding"] = strtoint(_read(1))
-    elf_header["file_version"] = strtoint(_read(1))
-    #ignore 9 chars
+    elf_header["file_class"] = strtosint(_read(1))
+    elf_header["file_encoding"] = strtosint(_read(1))
+    elf_header["file_version"] = strtosint(_read(1)) 
     _read(9) 
-    elf_header["e_type"] = strtoint(_read(2))
-    elf_header["e_machine"] = strtoint(_read(2))
-    elf_header["e_version"] = strtoint(_read(4))
-    elf_header["e_entry"] = strtoint(_read(8))
-    elf_header["e_phoff"] = strtoint(_read(8))
-    elf_header["e_shoff"] = strtoint(_read(8))
-    elf_header["e_flags"] = strtoint(_read(4))
-    elf_header["e_ehsize"] = strtoint(_read(2))
-    elf_header["e_phentsize"] = strtoint(_read(2))
-    elf_header["e_phnum"] = strtoint(_read(2))
-    elf_header["e_shentsize"] = strtoint(_read(2))
-    elf_header["e_shnum"] = strtoint(_read(2))
-    elf_header["e_shstrndx"] = strtoint(_read(2))
+    elf_header["e_type"] = strtosint(_read(2))
+    elf_header["e_machine"] = strtosint(_read(2))
+    elf_header["e_version"] = strtosint(_read(4))
+    elf_header["e_entry"] = strtosint(_read(8))
+    elf_header["e_phoff"] = strtosint(_read(8))
+    elf_header["e_shoff"] = strtosint(_read(8))
+    elf_header["e_flags"] = strtosint(_read(4))
+    elf_header["e_ehsize"] = strtosint(_read(2))
+    elf_header["e_phentsize"] = strtosint(_read(2))
+    elf_header["e_phnum"] = strtosint(_read(2))
+    elf_header["e_shentsize"] = strtosint(_read(2))
+    elf_header["e_shnum"] = strtosint(_read(2))
+    elf_header["e_shstrndx"] = strtosint(_read(2))
 
 def read_section_header(buffer):
     elf_header = elf["elf_header"]
@@ -843,16 +772,16 @@ def read_section_header(buffer):
     e_shentsize = elf_header["e_shentsize"] 
     for num in range(e_shnum):    
         sections.append({
-            "name": strtoint(_read(4)),
-            "type": strtoint(_read(4)),
-            "flag": strtoint(_read(8)),
-            "addr": strtoint(_read(8)),
-            "offset": strtoint(_read(8)),
-            "size": strtoint(_read(8)),
-            "link": strtoint(_read(4)),
-            "info": strtoint(_read(4)),
-            "align": strtoint(_read(8)),
-            "entsize": strtoint(_read(8))
+            "name": strtosint(_read(4)),
+            "type": strtosint(_read(4)),
+            "flag": strtosint(_read(8)),
+            "addr": strtosint(_read(8)),
+            "offset": strtosint(_read(8)),
+            "size": strtosint(_read(8)),
+            "link": strtosint(_read(4)),
+            "info": strtosint(_read(4)),
+            "align": strtosint(_read(8)),
+            "entsize": strtosint(_read(8))
         })
 
 
@@ -864,14 +793,14 @@ def read_program_header(buffer):
     e_phentsize = elf_header["e_phentsize"]
     for num in range(e_phnum):
         entry = {
-            "type": strtoint(_read(4)),
-            "flag": strtoint(_read(4)),
-            "offset": strtoint(_read(8)),
-            "virt": strtoint(_read(8)),
-            "phys": strtoint(_read(8)),
-            "filesize": strtoint(_read(8)),
-            "memsize": strtoint(_read(8)),
-            "align": strtoint(_read(8))
+            "type": strtosint(_read(4)),
+            "flag": strtosint(_read(4)),
+            "offset": strtosint(_read(8)),
+            "virt": strtosint(_read(8)),
+            "phys": strtosint(_read(8)),
+            "filesize": strtosint(_read(8)),
+            "memsize": strtosint(_read(8)),
+            "align": strtosint(_read(8))
             }
         #INTERP
         if entry['type'] == 3:
@@ -962,20 +891,20 @@ def read_symtab(buffer):
         symtab = []
         symtab_append = symtab.append 
         for entry in range(total): 
-            sym_name = strtoint(sym_read(4)) 
+            sym_name = strtosint(sym_read(4)) 
             if not sym_name:
                 sym_name = "unknown"
             elif flag == 1:
                 sym_name = strtab[sym_name]
             elif not flag == 2:
                 sym_name = dynsym[sym_name]
-            info = strtoint(sym_read(1)) 
+            info = strtosint(sym_read(1)) 
             #name ,bind , type, vis, index, value, size
             symtab_append((sym_name, info >> 4,  info & 0xf,
-                strtoint(sym_read(1)), 
-                strtoint(sym_read(2)), 
-                strtoint(sym_read(8)), 
-                strtoint(sym_read(8))
+                strtosint(sym_read(1)), 
+                strtosint(sym_read(2)), 
+                strtosint(sym_read(8)), 
+                strtosint(sym_read(8))
                 ))
         symtabs[section["name"]] = symtab                     
         #sym_data.close() 
@@ -993,8 +922,8 @@ def read_dynamic(buffer):
     buffer.seek(dynamic["offset"])
     total = dynamic["size"] / dynamic["entsize"] 
     for entry in range(total):
-        d_tag = strtoint(_read(8))
-        value = strtoint(_read(8)) 
+        d_tag = strtosint(_read(8))
+        value = strtosint(_read(8)) 
         dynamic_list.append({d_tag: value})    
         if not d_tag:
             break
@@ -1014,6 +943,17 @@ def read_dynamic(buffer):
             elif value in dyntab:
                 name = dyntab[value]
             entry[d_tag] = name 
+
+def decode_unsigned_leb(array):
+    n = 0 
+    k = len(array) - 1
+    array.reverse() 
+    for i, v in enumerate(array):
+        if i != k:
+            n = (n + v & HIGHBITMASK) << LOWBITSHIFT
+        else:
+            n += v & HIGHBITMASK
+    return n
 
 
 def read_debuginfo(buffer):
@@ -1049,15 +989,16 @@ def read_debuginfo(buffer):
         if cur >= section_end: 
             break
         cu_addrs.append(cur) 
-        buffer.seek(strtoint(_read(4)), 1) 
-    cus = []
+        buffer.seek(strtosint(_read(4)), 1) 
+    cus = [] 
     for cu_addr in cu_addrs:    
+        print "cu_addr:", hex(cu_addr)
         buffer.seek(cu_addr) 
-        unit_length = strtoint(_read(4))
-        version = strtoint(_read(2))
-        abbrev_offset = strtoint(_read(4))
-        addr_size = strtoint(_read(1))
-        abbr_num = strtoint(_read(1))
+        unit_length = strtouint(_read(4))
+        version = strtouint(_read(2)) 
+        abbrev_offset = strtouint(_read(4))
+        addr_size = strtouint(_read(1))
+        abbr_num = strtouint(_read(1)) 
         cus.append({
             "length": unit_length,
             "version": version,
@@ -1070,10 +1011,11 @@ def read_debuginfo(buffer):
             }) 
     for cu in cus:
         buffer.seek(cu["abbrev_offset"]+debug_abbrev["offset"]) 
-        buffer.seek(3, 1)
+        #buffer.seek(3, 1)
+        
         while True:        
-            attr_type = strtoint(_read(1))
-            attr_form = strtoint(_read(1))
+            attr_type = strtosint(_read(1))
+            attr_form = strtosint(_read(1))
             if not attr_type:
                 break
             print AT_types[attr_type], FORM_types[attr_form] 
@@ -1090,7 +1032,7 @@ def read_debuginfo(buffer):
             length = attr_form_to_len[df[1]] 
             value = None 
             if length < 0xfff1:
-                value = strtoint(_read(length)) 
+                value = strtosint(_read(length)) 
             elif length == 0xfff1:
                 strbuffer = StringIO()
                 while True:
@@ -1101,9 +1043,9 @@ def read_debuginfo(buffer):
                 value = strbuffer.getvalue()
                 strbuffer.close()
             elif length == 0xfff2:
-                value = strtoint(_read(8))
+                value = strtosint(_read(8))
             elif length == 0xfff3:
-                value = strtoint(_read(8))
+                value = strtosint(_read(8))
             if df[0] == 0x03:
                 if found_str and (df[1] == 0x0e):
                     value = strtab[value]
@@ -1113,25 +1055,25 @@ def read_debuginfo(buffer):
             read_debugline(buffer, debug_line["offset"], cu)
     elf["compile_units"] = cus        
 
-
 def read_debugline(buffer,debugline_offset, cu):
     buffer.seek(debugline_offset)
     buffer.seek(cu["data"][0x10], 1) 
     print hex(buffer.tell())
-    unit_len = strtoint(_read(4)) 
-    version = strtoint(_read(2))
-    header_len = strtoint(_read(4))
-    mini_ins_len = strtoint(_read(1))
-    #max_op_per_ins =strtoint(_read(1))
-    default_is_stmt = strtoint(_read(1))
-    line_base = strtoint(_read(1))
-    line_range = strtoint(_read(1))
-    op_base = strtoint(_read(1))
+    unit_len = strtosint(_read(4)) 
+    stop_point = buffer.tell() + unit_len
+    version = strtosint(_read(2))
+    header_len = strtosint(_read(4))
+    mini_ins_len = strtosint(_read(1))
+    #max_op_per_ins =strtosint(_read(1))
+    default_is_stmt = strtosint(_read(1))
+    line_base = strtosint(_read(1))
+    line_range = strtosint(_read(1))
+    op_base = strtosint(_read(1))
     opargs_array = []
     opargs_array_len = op_base - 1
     start = 1
     while start <= opargs_array_len: 
-        opargs_array.append(strtoint(_read(1)))
+        opargs_array.append(strtosint(_read(1)))
         start += 1        
     str_buffer = StringIO()    
     while True:
@@ -1153,9 +1095,9 @@ def read_debugline(buffer,debugline_offset, cu):
         file_len = 0 
         c = _read(1)
         if c == "\x00":
-            dir_index = strtoint(_read(1)) 
-            mtime = strtoint(_read(1)) 
-            file_len = strtoint(_read(1)) 
+            dir_index = strtosint(_read(1)) 
+            mtime = strtosint(_read(1)) 
+            file_len = strtosint(_read(1)) 
             file_names.append((str_buffer.getvalue(),
                                 dir_index,
                                 mtime,
@@ -1184,42 +1126,54 @@ def read_debugline(buffer,debugline_offset, cu):
     reg_fixed = False
     reg_ext_end = 0
     oparg = 0 
-    pdb.set_trace()
     while True:
-        op = strtoint(_read(1))     
-        print "special after op", hex(reg_address), reg_line
+        if buffer.tell() == stop_point:
+            break
+        op = strtouint(_read(1))   
+        print "op", hex(op), op
         if op == DW_LNS_copy: 
-            if reg_ext_end == 0:
-                reg_ext_end += 1
-            #sequence end  \x01\x01
-            elif reg_ext_end == 1: 
-                pass
-            #op copy \x01
-            elif reg_ext_end != 1:
+            next = strtosint(_read(1))
+            if next == 1: 
+                #sequences end, reset registers 
+                reg_address = 0
+                reg_line = 1
+                reg_op_index = 0
+                reg_file = 1
+                reg_row  = 0
+                is_stmt = default_is_stmt
+                reg_column = 0
+                reg_basic_block = False
+                reg_prologue_end = False
+                reg_epilogue_begin = False
+                reg_discriminator = 0 
+                reg_fixed = False
+                reg_ext_end = 0 
+            else: 
+                op = next
                 reg_row += 1
                 reg_discriminator = 0
                 reg_basic_block = False
                 reg_prologue_end = False
-                reg_epilogue_begin = False
-                reg_ext_end = 0 
+                reg_epilogue_begin = False 
         if op > DW_LNS_set_isa:
-            #special ops
+            #special ops 
             operation_advance = (op - op_base) / line_range
-            reg_address += mini_ins_len * (operation_advance + reg_op_index)
-            reg_op_index += operation_advance
+            reg_address += operation_advance
+            #reg_op_index += operation_advance
             reg_line += line_base + (op - op_base) % line_range 
+
         elif op == DW_LNS_advance_pc: 
             if reg_fixed:
-                reg_address += strtoint(_read(8))
-                reg_fixed = False
+                reg_address = strtosint(_read(8)) 
+                reg_fixed = False 
             else:
-                reg_address += strtoint(_read(2)) 
+                reg_address += strtosint(_read(2)) 
         elif op == DW_LNS_advance_line: 
-            reg_line += strtoint(_read(1)) 
+            reg_line += strtosint(_read(1)) 
         elif op == DW_LNS_set_file:
-            reg_file = strtoint(_read(1))
+            reg_file = strtosint(_read(1)) 
         elif op == DW_LNS_set_column:
-            reg_column = strtoint(_read(1))
+            reg_column = strtosint(_read(1)) 
         elif op == DW_LNS_negate_stmt:
             is_stmt = not is_stmt 
         elif op == DW_LNS_set_basic_block:
@@ -1229,11 +1183,10 @@ def read_debugline(buffer,debugline_offset, cu):
         elif op == DW_LNS_fixed_advance_pc:
             reg_fixed = True
         elif op == DW_LINE_set_address:
-            reg_address = strtoint(_read(8)) 
+            reg_address = strtosint(_read(8)) 
         elif op == DW_LINE_define_file:
-            pass
-        elif op == DW_LINE_end_sequence:
-            break 
+            pass 
+
         
 def read_debugabbr(buffer):
     sections = elf["sections"]
