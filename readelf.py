@@ -21,12 +21,21 @@ def print_usage():
 
 def print_dynamic(elf):
     dynamic = elf["dynamic"] 
-    for entry in dynamic:
-        tag = elfutils.dynamic_type[entry.keys()[0]]
+    strtypes = [elfutils.DT_NEEDED, elfutils.DT_SONAME, elfutils.DT_RPATH]
+    for entry in dynamic: 
+        tag = entry.keys()[0]
         value = entry.values()[0]
-        if isinstance(value, str):
+        if tag in strtypes:
+            tag = elfutils.dynamic_type[tag]
             print "{:<20}{:<30}".format(tag, value)
+        elif tag == elfutils.DT_FLAGS: 
+            tag = elfutils.dynamic_type[tag] 
+            print "{:<20}{:<30}".format(tag, elfutils.DT_FLAGS_type[value])
+        elif tag == elfutils.DT_FLAGS_1: 
+            tag = elfutils.dynamic_type[tag] 
+            print "{:<20}{:<30}".format(tag, elfutils.DT_FLAGS_1_type[value])
         else:
+            tag = elfutils.dynamic_type[tag]
             print "{:<20}{:<16}".format(tag, hex(value))
 
 def print_symbol(elf):

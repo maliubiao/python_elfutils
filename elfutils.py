@@ -211,6 +211,8 @@ ph_flags = {
 DT_NEEDED = 1
 DT_SONAME = 14
 DT_RPATH = 15
+DT_FLAGS = 30
+DT_FLAGS_1 = 0x6ffffffb
 
 dynamic_type = {
         0: "DT_NULL",
@@ -277,7 +279,7 @@ dynamic_type = {
         0x6ffffeff: "DT_SYMINFO",
         0x6ffffff9: "DT_RELACOUNT",
         0x6ffffffa: "DT_RELCOUNT",
-        0x6ffffffb: "DT_RELCOUNT",
+        0x6ffffffb: "DT_FLAGS_1",
         0x6ffffffc: "DT_VERDEF",
         0x6ffffffd: "DT_VERDEFNUM",
         0x6ffffffe: "DT_VERNEED",
@@ -285,6 +287,31 @@ dynamic_type = {
         0x6ffffff0: "DT_VERSYM"
         }
 
+DT_FLAGS_type = {
+        1 << 0: "DF_ORIGIN",
+        1 << 1: "DF_SYMBOLIC",
+        1 << 2: "DF_TEXTREL",
+        1 << 3: "DF_BIND_NOW",
+        1 << 4: "DF_STATIC_TLS"
+        }
+
+DT_FLAGS_1_type = {
+        0x1: "DT_1_NOW",
+        0x2: "DT_1_GLOBAL",
+        0x4: "DT_1_GROUP",
+        0x8: "DT_1_NODELETE",
+        0x10: "DT_1_LOADFLTR",
+        0x20: "DT_1_INITFIRST",
+        0x40: "DT_1_NOOPEN",
+        0x80: "DT_1_ORIGIN",
+        0x100: "DT_1_DIRECT",
+        0x200: "DT_1_TRANS",
+        0x400: "DT_1_INTERPOSE",
+        0x800: "DT_1_NODEFLIB",
+        0x1000: "DT_1_NODUMP",
+        0x2000: "DT_1_CONLFAT"
+        }
+        
 rel_type = {
         0: "R_386_NONE",
         1: "R_386_32",
