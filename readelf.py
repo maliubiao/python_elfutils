@@ -42,7 +42,7 @@ def print_symbol(elf):
         for symbol in symtabs[symtab]:
             value = hex(symbol[VALUE])
             name = symbol[NAME]
-            sym_type = type_table[symbol[TYPE]].split("_")[-1]
+            sym_type = type_table[symbol[TYPE]].split("_")[-1] 
             bind_type = bind_type_table[symbol[BIND]].split("_")[-1] 
             vis_type =  vis_type_table[symbol[VIS]].split("_")[-1] 
             print of.format(value, sym_type, vis_type, bind_type, name)

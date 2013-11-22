@@ -1,9 +1,11 @@
 import os
 import mmap 
 import pdb
+import io
 from cStringIO import StringIO
-from baseutils import strtosint
-from baseutils import strtouint
+from baseutils import string_to_unsigned
+from baseutils import string_to_signed
+
 elf = None
 _read = None
 
@@ -13,8 +15,20 @@ ELF_SYMBOL = 1 << 3
 ELF_DYNAMIC = 1 << 4
 DWARF_INFO = 1 << 5 
 
+#types
+ELF64 = 8
+ELF32 = 4
+ELF16 = 2
+ELF8 = 1
+
+
 HIGHBITMASK = 0b1111111
 LOWBITSHIFT = 7
+ELFSIG = "\x7fELF"
+
+EM_NONE = 0
+EM_386 = 3
+EM_X86_64 = 62
 
 elf_arch_type = {
         0: "EM_NONE",
@@ -22,18 +36,31 @@ elf_arch_type = {
         62: "EM_X86_64"
         }
         
+ELFDATANONE = 0
+ELFDATA2LSB = 1
+ELFDATA2MSB = 2
+
 elf_encoding = {
         0: "ELFDATANONE",
         1: "ELFDATA2LSB",
         2: "ELFDATA2MSB"
         }
 
+ELFCLASSNONE = 0
+ELFCLASS32 = 1
+ELFCLASS64 = 2
 
 elf_class_type = {
         0: "ELFCLASSNONE",
         1: "ELFCLASS32",
         2: "ELFCLASS64"
         }
+
+ET_NONE = 0
+ET_REL = 1
+ET_EXEC = 2
+ET_DYN = 3
+ET_CORE = 4
 
 elf_type = {
         0: "ET_NONE",
@@ -42,6 +69,32 @@ elf_type = {
         3: "ET_DYN",
         4: "ET_CORE"
         }
+
+SHT_NULL = 0
+SHT_PROGBITS = 1
+SHT_SYMTAB = 2
+SHT_STRTAB = 3
+SHT_RELA = 4
+SHT_HASH = 5
+SHT_DYNAMIC = 6
+SHT_NOTE = 7
+SHT_NOBITS = 8
+SHT_REL = 9
+SHT_SHLIB = 10
+SHT_DYNSYM = 11
+SHT_INIT_ARRAY = 14
+SHT_FINI_ARRAY = 15
+SHT_PREINIT_ARRAY = 16
+SHT_GROUP = 17
+SHT_SYMTAB_SHNDX = 18
+SHT_LOOS = 0x60000000 
+SHT_GNU_INCREMENTAL_INPUTS = 0x6fff4700
+SHT_GNU_ATTRIBUTES = 0x6ffffff5
+SHT_GNU_HASH = 0x6ffffff6
+SHT_GNU_LIBLIST = 0x6ffffff7
+SHT_GNU_verdef = 0x6ffffffd
+SHT_GNU_verneed = 0x6ffffffe
+SHT_GNU_versym = 0x6fffffff
 
 sh_type = {
         0: "SHT_NULL",
@@ -61,8 +114,7 @@ sh_type = {
         16: "SHT_PREINIT_ARRAY",
         17: "SHT_GROUP",
         18: "SHT_SYMTAB_SHNDX",
-        0x60000000: "SHT_LOOS",
-        0x6fffffff: "SHT_HIOS",
+        0x60000000: "SHT_LOOS", 
         0x6fff4700: "SHT_GNU_INCREMENTAL_INPUTS",
         0x6ffffff5: "SHT_GNU_ATTRIBUTES",
         0x6ffffff6: "SHT_GNU_HASH",
@@ -71,6 +123,20 @@ sh_type = {
         0x6ffffffe: "SHT_GNU_verneed",
         0x6fffffff: "SHT_GNU_versym"
         }
+
+SHF_NONE = 0
+SHF_ALLOC = 1 << 0
+SHF_EXECINSTR = 1<< 2
+SHF_MERGE = 1 << 4
+SHF_STRINGS = 1 << 5
+SHF_INFO_LINK = 1 << 6
+SHF_LINK_ORDER = 1 << 7
+SHF_OS_NONCONFORMING = 1 << 8 
+SHF_GROUP = 1 << 9 
+SHF_TLS = 1 << 10
+SHF_MASKOS = 0x0ff00000
+SHF_MASKPROC = 0xf0000000
+SHF_EXCLUDE = 0x80000000
 
 sh_flags = {
         0: "SHF_NONE",
@@ -96,6 +162,22 @@ def decide_shflags(flag):
         if flag & key:
             t.append(sh_flags[key])
     return "+".join(t)
+
+PT_NULL = 0
+PT_LOAD = 1
+PT_DYNMAIC = 2
+PT_INTERP = 3
+PT_NOTE = 4
+PT_SHLIB = 5
+PT_PHDR = 6
+PT_TLS = 7
+PT_LOOS = 0x60000000
+PT_HIOS = 0x6fffffff
+PT_LOPROC = 0x70000000
+PT_HIPROC = 0x7fffffff
+PT_GNU_EH_FRAME = 0x6474e550
+PT_GNU_STACK = 0x6474e551
+PT_GNU_RELRO = 0x6474e552
 
 ph_type = {
         0: "PT_NULL",
@@ -125,6 +207,10 @@ ph_flags = {
         6: "PF_R + PF_W",
         7: "PF_R + PF_W + PF_X"
         }
+
+DT_NEEDED = 1
+DT_SONAME = 14
+DT_RPATH = 15
 
 dynamic_type = {
         0: "DT_NULL",
@@ -233,7 +319,7 @@ sym_bind_type = {
         0: "STB_LOCAL", 
         1: "STB_GLOBAL",
         2: "STB_WEAK",
-        -6: "STB_UNIQUE"
+        10: "STB_UNIQUE"
         } 
 
 sym_spec_index = {
@@ -743,25 +829,26 @@ def print_mem_usage(position):
 def read_header(buffer):
     buffer.seek(0)
     elf_header = elf['elf_header']
-    elf_header["file_ident"] = _read(4)
-    assert elf_header["file_ident"] == "\x7fELF"
-    elf_header["file_class"] = strtosint(_read(1))
-    elf_header["file_encoding"] = strtosint(_read(1))
-    elf_header["file_version"] = strtosint(_read(1)) 
-    _read(9) 
-    elf_header["e_type"] = strtosint(_read(2))
-    elf_header["e_machine"] = strtosint(_read(2))
-    elf_header["e_version"] = strtosint(_read(4))
-    elf_header["e_entry"] = strtosint(_read(8))
-    elf_header["e_phoff"] = strtosint(_read(8))
-    elf_header["e_shoff"] = strtosint(_read(8))
-    elf_header["e_flags"] = strtosint(_read(4))
-    elf_header["e_ehsize"] = strtosint(_read(2))
-    elf_header["e_phentsize"] = strtosint(_read(2))
-    elf_header["e_phnum"] = strtosint(_read(2))
-    elf_header["e_shentsize"] = strtosint(_read(2))
-    elf_header["e_shnum"] = strtosint(_read(2))
-    elf_header["e_shstrndx"] = strtosint(_read(2))
+    elf_header["file_ident"] = _read(ELF32)
+    assert elf_header["file_ident"] == ELFSIG
+    elf_header["file_class"] = string_to_unsigned(_read(ELF8))
+    elf_header["file_encoding"] = string_to_unsigned(_read(ELF8))
+    elf_header["file_version"] = string_to_unsigned(_read(ELF8)) 
+    #ignore 9 bytes
+    buffer.seek(9, io.SEEK_CUR)
+    elf_header["e_type"] = string_to_unsigned(_read(ELF16))
+    elf_header["e_machine"] = string_to_unsigned(_read(ELF16))
+    elf_header["e_version"] = string_to_unsigned(_read(ELF32))
+    elf_header["e_entry"] = string_to_unsigned(_read(ELF64))
+    elf_header["e_phoff"] = string_to_unsigned(_read(ELF64))
+    elf_header["e_shoff"] = string_to_unsigned(_read(ELF64))
+    elf_header["e_flags"] = string_to_unsigned(_read(ELF32))
+    elf_header["e_ehsize"] = string_to_unsigned(_read(ELF16))
+    elf_header["e_phentsize"] = string_to_unsigned(_read(ELF16))
+    elf_header["e_phnum"] = string_to_unsigned(_read(ELF16))
+    elf_header["e_shentsize"] = string_to_unsigned(_read(ELF16))
+    elf_header["e_shnum"] = string_to_unsigned(_read(ELF16))
+    elf_header["e_shstrndx"] = string_to_unsigned(_read(ELF16))
 
 def read_section_header(buffer):
     elf_header = elf["elf_header"]
@@ -772,16 +859,16 @@ def read_section_header(buffer):
     e_shentsize = elf_header["e_shentsize"] 
     for num in range(e_shnum):    
         sections.append({
-            "name": strtosint(_read(4)),
-            "type": strtosint(_read(4)),
-            "flag": strtosint(_read(8)),
-            "addr": strtosint(_read(8)),
-            "offset": strtosint(_read(8)),
-            "size": strtosint(_read(8)),
-            "link": strtosint(_read(4)),
-            "info": strtosint(_read(4)),
-            "align": strtosint(_read(8)),
-            "entsize": strtosint(_read(8))
+            "name": string_to_unsigned(_read(ELF32)),
+            "type": string_to_unsigned(_read(ELF32)),
+            "flag": string_to_unsigned(_read(ELF64)),
+            "addr": string_to_unsigned(_read(ELF64)),
+            "offset": string_to_unsigned(_read(ELF64)),
+            "size": string_to_unsigned(_read(ELF64)),
+            "link": string_to_unsigned(_read(ELF32)),
+            "info": string_to_unsigned(_read(ELF32)),
+            "align": string_to_unsigned(_read(ELF64)),
+            "entsize": string_to_unsigned(_read(ELF64))
         })
 
 
@@ -793,17 +880,17 @@ def read_program_header(buffer):
     e_phentsize = elf_header["e_phentsize"]
     for num in range(e_phnum):
         entry = {
-            "type": strtosint(_read(4)),
-            "flag": strtosint(_read(4)),
-            "offset": strtosint(_read(8)),
-            "virt": strtosint(_read(8)),
-            "phys": strtosint(_read(8)),
-            "filesize": strtosint(_read(8)),
-            "memsize": strtosint(_read(8)),
-            "align": strtosint(_read(8))
+            "type": string_to_unsigned(_read(ELF32)),
+            "flag": string_to_unsigned(_read(ELF32)),
+            "offset": string_to_unsigned(_read(ELF64)),
+            "virt": string_to_unsigned(_read(ELF64)),
+            "phys": string_to_unsigned(_read(ELF64)),
+            "filesize": string_to_unsigned(_read(ELF64)),
+            "memsize": string_to_unsigned(_read(ELF64)),
+            "align": string_to_unsigned(_read(ELF64))
             }
         #INTERP
-        if entry['type'] == 3:
+        if entry['type'] == PT_INTERP:
             mark = buffer.tell() 
             buffer.seek(entry['offset'])
             elf['interpreter'] = _read(entry['filesize']) 
@@ -847,7 +934,7 @@ def read_strtab(buffer):
     sections = elf["sections"]
     strtab_sections = []
     for section in sections:
-        if section["type"] == 3:
+        if section["type"] == SHT_STRTAB:
             strtab_sections.append(section) 
     shstrtab_section = None
     for section in strtab_sections:
@@ -874,9 +961,9 @@ def read_symtab(buffer):
     strtab = elf["strtabs"][".strtab"]
     dynsym = elf["strtabs"][".dynstr"]
     for section in sections:
-        if section["type"] == 2:
+        if section["type"] == SHT_SYMTAB:
             symtab_sections.append(section) 
-        if section["type"] == 11:
+        if section["type"] == SHT_DYNSYM:
             symtab_sections.append(section)
     for section in symtab_sections: 
         flag = 0
@@ -891,20 +978,20 @@ def read_symtab(buffer):
         symtab = []
         symtab_append = symtab.append 
         for entry in range(total): 
-            sym_name = strtosint(sym_read(4)) 
+            sym_name = string_to_unsigned(sym_read(ELF32)) 
             if not sym_name:
                 sym_name = "unknown"
             elif flag == 1:
                 sym_name = strtab[sym_name]
             elif not flag == 2:
                 sym_name = dynsym[sym_name]
-            info = strtosint(sym_read(1)) 
+            info = string_to_unsigned(sym_read(ELF8)) 
             #name ,bind , type, vis, index, value, size
             symtab_append((sym_name, info >> 4,  info & 0xf,
-                strtosint(sym_read(1)), 
-                strtosint(sym_read(2)), 
-                strtosint(sym_read(8)), 
-                strtosint(sym_read(8))
+                string_to_unsigned(sym_read(ELF8)), 
+                string_to_unsigned(sym_read(ELF16)), 
+                string_to_unsigned(sym_read(ELF64)), 
+                string_to_unsigned(sym_read(ELF64))
                 ))
         symtabs[section["name"]] = symtab                     
         #sym_data.close() 
@@ -916,18 +1003,18 @@ def read_dynamic(buffer):
     sections = elf["sections"]
     dynamic = None
     for section in sections:
-        if section["type"] == 6:
+        if section["type"] == SHT_DYNAMIC:
             dynamic = section            
     dynamic_list = elf["dynamic"]
     buffer.seek(dynamic["offset"])
     total = dynamic["size"] / dynamic["entsize"] 
     for entry in range(total):
-        d_tag = strtosint(_read(8))
-        value = strtosint(_read(8)) 
+        d_tag = string_to_unsigned(_read(ELF64))
+        value = string_to_unsigned(_read(ELF64)) 
         dynamic_list.append({d_tag: value})    
         if not d_tag:
             break
-    in_symtab = [1, 14, 15]     
+    in_symtab = [DT_NEEDED, DT_SONAME, DT_RPATH]     
     strtab = elf["strtabs"][".strtab"]
     dyntab = elf["strtabs"][".dynstr"]
     for entry in dynamic_list: 
@@ -989,16 +1076,16 @@ def read_debuginfo(buffer):
         if cur >= section_end: 
             break
         cu_addrs.append(cur) 
-        buffer.seek(strtosint(_read(4)), 1) 
+        buffer.seek(string_to_unsigned(_read(ELF32)), 1) 
     cus = [] 
     for cu_addr in cu_addrs:    
         print "cu_addr:", hex(cu_addr)
         buffer.seek(cu_addr) 
-        unit_length = strtouint(_read(4))
-        version = strtouint(_read(2)) 
-        abbrev_offset = strtouint(_read(4))
-        addr_size = strtouint(_read(1))
-        abbr_num = strtouint(_read(1)) 
+        unit_length = string_to_signed(_read(ELF32))
+        version = string_to_signed(_read(ELF16)) 
+        abbrev_offset = string_to_signed(_read(ELF32))
+        addr_size = string_to_signed(_read(ELF8))
+        abbr_num = string_to_signed(_read(ELF8)) 
         cus.append({
             "length": unit_length,
             "version": version,
@@ -1014,8 +1101,8 @@ def read_debuginfo(buffer):
         #buffer.seek(3, 1)
         
         while True:        
-            attr_type = strtosint(_read(1))
-            attr_form = strtosint(_read(1))
+            attr_type = string_to_unsigned(_read(ELF8))
+            attr_form = string_to_unsigned(_read(ELF8))
             if not attr_type:
                 break
             print AT_types[attr_type], FORM_types[attr_form] 
@@ -1032,20 +1119,20 @@ def read_debuginfo(buffer):
             length = attr_form_to_len[df[1]] 
             value = None 
             if length < 0xfff1:
-                value = strtosint(_read(length)) 
+                value = string_to_unsigned(_read(length)) 
             elif length == 0xfff1:
                 strbuffer = StringIO()
                 while True:
-                    c = _read(1)
+                    c = _read(ELF8)
                     if c=="\x00":
                         break
                     strbuffer.write(c) 
                 value = strbuffer.getvalue()
                 strbuffer.close()
             elif length == 0xfff2:
-                value = strtosint(_read(8))
+                value = string_to_unsigned(_read(ELF64))
             elif length == 0xfff3:
-                value = strtosint(_read(8))
+                value = string_to_unsigned(_read(ELF64))
             if df[0] == 0x03:
                 if found_str and (df[1] == 0x0e):
                     value = strtab[value]
@@ -1059,28 +1146,28 @@ def read_debugline(buffer,debugline_offset, cu):
     buffer.seek(debugline_offset)
     buffer.seek(cu["data"][0x10], 1) 
     print hex(buffer.tell())
-    unit_len = strtosint(_read(4)) 
+    unit_len = string_to_unsigned(_read(ELF32)) 
     stop_point = buffer.tell() + unit_len
-    version = strtosint(_read(2))
-    header_len = strtosint(_read(4))
-    mini_ins_len = strtosint(_read(1))
-    #max_op_per_ins =strtosint(_read(1))
-    default_is_stmt = strtosint(_read(1))
-    line_base = strtosint(_read(1))
-    line_range = strtosint(_read(1))
-    op_base = strtosint(_read(1))
+    version = string_to_unsigned(_read(ELF16))
+    header_len = string_to_unsigned(_read(ELF32))
+    mini_ins_len = string_to_unsigned(_read(ELF8))
+    #max_op_per_ins =string_to_unsigned(_read(ELF8))
+    default_is_stmt = string_to_unsigned(_read(ELF8))
+    line_base = string_to_unsigned(_read(ELF8))
+    line_range = string_to_unsigned(_read(ELF8))
+    op_base = string_to_unsigned(_read(ELF8))
     opargs_array = []
     opargs_array_len = op_base - 1
     start = 1
     while start <= opargs_array_len: 
-        opargs_array.append(strtosint(_read(1)))
+        opargs_array.append(string_to_unsigned(_read(ELF8)))
         start += 1        
     str_buffer = StringIO()    
     while True:
-        c = _read(1) 
+        c = _read(ELF8) 
         if c == "\x00":
             back = buffer.tell()
-            if _read(1) == "\x00":
+            if _read(ELF8) == "\x00":
                 break
             else:
                 buffer.seek(back) 
@@ -1093,18 +1180,18 @@ def read_debugline(buffer,debugline_offset, cu):
         dir_index = 0
         mtime = 0
         file_len = 0 
-        c = _read(1)
+        c = _read(ELF8)
         if c == "\x00":
-            dir_index = strtosint(_read(1)) 
-            mtime = strtosint(_read(1)) 
-            file_len = strtosint(_read(1)) 
+            dir_index = string_to_unsigned(_read(ELF8)) 
+            mtime = string_to_unsigned(_read(ELF8)) 
+            file_len = string_to_unsigned(_read(ELF8)) 
             file_names.append((str_buffer.getvalue(),
                                 dir_index,
                                 mtime,
                                 file_len))
             str_buffer.truncate(0)
             back = buffer.tell()
-            if _read(1) == "\x00":
+            if _read(ELF8) == "\x00":
                 break
             else:
                 buffer.seek(back)
@@ -1129,10 +1216,10 @@ def read_debugline(buffer,debugline_offset, cu):
     while True:
         if buffer.tell() == stop_point:
             break
-        op = strtouint(_read(1))   
+        op = string_to_signed(_read(ELF8))   
         print "op", hex(op), op
         if op == DW_LNS_copy: 
-            next = strtosint(_read(1))
+            next = string_to_unsigned(_read(ELF8))
             if next == 1: 
                 #sequences end, reset registers 
                 reg_address = 0
@@ -1164,16 +1251,16 @@ def read_debugline(buffer,debugline_offset, cu):
 
         elif op == DW_LNS_advance_pc: 
             if reg_fixed:
-                reg_address = strtosint(_read(8)) 
+                reg_address = string_to_unsigned(_read(ELF64)) 
                 reg_fixed = False 
             else:
-                reg_address += strtosint(_read(2)) 
+                reg_address += string_to_unsigned(_read(ELF16)) 
         elif op == DW_LNS_advance_line: 
-            reg_line += strtosint(_read(1)) 
+            reg_line += string_to_unsigned(_read(ELF8)) 
         elif op == DW_LNS_set_file:
-            reg_file = strtosint(_read(1)) 
+            reg_file = string_to_unsigned(_read(ELF8)) 
         elif op == DW_LNS_set_column:
-            reg_column = strtosint(_read(1)) 
+            reg_column = string_to_unsigned(_read(ELF8)) 
         elif op == DW_LNS_negate_stmt:
             is_stmt = not is_stmt 
         elif op == DW_LNS_set_basic_block:
@@ -1183,7 +1270,7 @@ def read_debugline(buffer,debugline_offset, cu):
         elif op == DW_LNS_fixed_advance_pc:
             reg_fixed = True
         elif op == DW_LINE_set_address:
-            reg_address = strtosint(_read(8)) 
+            reg_address = string_to_unsigned(_read(ELF64)) 
         elif op == DW_LINE_define_file:
             pass 
 
