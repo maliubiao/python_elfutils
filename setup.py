@@ -3,7 +3,7 @@ from distutils.core import setup, Extension
 
 m = Extension("baseutils",
         sources=["baseutils.c"],
-        extra_compile_args=["-gdwarf-2", "-gstrict-dwarf"])
+        extra_compile_args=["-gdwarf-2","-Wall", "-Werror" ])
 
 setup(name = "baseutils", description = "baseutils for python27",
         ext_modules = [m])

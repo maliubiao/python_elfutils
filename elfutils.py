@@ -1071,30 +1071,18 @@ def decode_unsigned_leb(array):
 
 
 def read_debuginfo(buffer):
-    sections = elf["sections"]
-    debug_info = ".debug_info" 
-    debug_abbrev = ".debug_abbrev"
-    debug_str = ".debug_str"
-    debug_line = ".debug_line"
-    exist = 0
-    for section in sections:
-        name = section["name"]
-        if name == debug_info:
-            exist += 1
-            debug_info = section 
-        elif name == debug_abbrev:
-            exist += 4
-            debug_abbrev = section
-        elif name == debug_str: 
-            debug_str = section
-        elif name == debug_line:        
-            debug_line = section
-    if exist == 0:
-        assert False, "where is section .debug_abbrev and .debug_info?"
-    elif exist == 1:
-        assert False, "where is section .debug_abbrev" 
-    elif exist == 4:
-        assert False, "where is section .debug_info" 
+    sections = elf["sections"] 
+    section_names = [x["name"] for x in sections]
+    debug_sections = {}
+    debug_list = [".debug_info", ".debug_abbrev",
+            ".debug_str", ".debug_line"]
+    for i in debug_list:
+        if i not in section_names:
+            raise Exception("where is section: %s" % i) 
+    debug_info = sections[section_names.index(debug_list[0])] 
+    debug_abbrev = sections[section_names.index(debug_list[1])]
+    debug_str =sections[section_names.index(debug_list[2])]
+    debug_line = sections[section_names.index(debug_list[3])]
     buffer.seek(debug_info["offset"])
     cu_addrs = []
     section_end = debug_info["offset"] + debug_info["size"] 
@@ -1212,10 +1200,11 @@ def read_debugline(buffer,debugline_offset, cu):
             dir_index = string_to_unsigned(_read(ELF8)) 
             mtime = string_to_unsigned(_read(ELF8)) 
             file_len = string_to_unsigned(_read(ELF8)) 
-            file_names.append((str_buffer.getvalue(),
-                                dir_index,
-                                mtime,
-                                file_len))
+            file_names.append((
+                str_buffer.getvalue(),
+                dir_index,
+                mtime,
+                file_len))
             str_buffer.truncate(0)
             back = buffer.tell()
             if _read(ELF8) == "\x00":
@@ -1334,7 +1323,7 @@ def set_target(path, flags):
         "dynamic": [],
         "compile_units": []
         } 
-    f = open(path, "r+b")
+    f = open(path, "rb")
     buffer = mmap.mmap(f.fileno(), 0, mmap.MAP_PRIVATE, mmap.PROT_READ)
     _read = buffer.read
     if flags & ELF_HEADER:
