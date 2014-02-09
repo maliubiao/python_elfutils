@@ -1058,17 +1058,38 @@ def read_dynamic(buffer):
                 name = dyntab[value]
             entry[d_tag] = name 
 
-def decode_unsigned_leb(array):
-    n = 0 
-    k = len(array) - 1
-    array.reverse() 
-    for i, v in enumerate(array):
-        if i != k:
-            n = (n + v & HIGHBITMASK) << LOWBITSHIFT
-        else:
-            n += v & HIGHBITMASK
-    return n
+def decode_unsigned_leb(buffer):
+    l = 1L
+    while True: 
+        part = ord(buffer.read(1)) 
+        #remove the hight order
+        l += part & 0x7f << 7 
+        #stream end, high order is 0
+        if not part & 0x80:
+            break 
+    return l
 
+def encode_unsigned_leb(integer):
+    pc = StringIO()
+    bits_count = 1 
+    while True:
+        if (integer >> bits_count) == 0:
+            break
+        bits_count += 1 
+    last = bits_count - 7
+    for i in range(0, bits_count -6, 7): 
+        val = (integer & (0x7fL << i)) >> i 
+        #set hight order 
+        if (not bits_count % 7) and (i == last):
+            pc.write(chr(val))
+        else:
+            pc.write(chr(val | 0x80))
+    if bits_count % 7:
+        pc.write(chr(integer >> (bits_count - bits_count % 7))) 
+        
+    final = pc.getvalue()
+    return final
+    
 
 def read_debuginfo(buffer):
     sections = elf["sections"] 
