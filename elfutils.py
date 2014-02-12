@@ -1,6 +1,6 @@
 import os
 import mmap 
-import io
+import io 
 from cStringIO import StringIO
 from baseutils import string_to_unsigned
 from baseutils import string_to_signed
@@ -12,7 +12,9 @@ _read = None
 ELF_HEADER = 1 << 2
 ELF_SYMBOL = 1 << 3
 ELF_DYNAMIC = 1 << 4
-DWARF_INFO = 1 << 5 
+ELF_RELA = 1 << 5
+DWARF_INFO = 1 << 10 
+
 
 #types
 ELF64 = 8
@@ -1058,13 +1060,6 @@ def build_strtab(buffer, section):
         j += 1 
     return strtab
 
-def search_sections(key, value):
-    pocket = []
-    sections = elf["sections"]
-    for section in sections:
-        if section[key] == value:
-            pocket.append(section)
-    return pocket
 
 def read_strtab(buffer): 
     elf_header = elf["elf_header"] 
@@ -1106,23 +1101,19 @@ def read_symtab(buffer):
     sym_read = _read
     elf_type = elf["elf_header"]["file_class"]
     for section in symtab_sections: 
-        flag = 0
-        if section["name"] == ".symtab":
-            flag = 1
-        elif section["name"] == ".dynsym":
-            flag = 2
         buffer.seek(section["offset"]) 
         extra = section["align"] - (section["entsize"] / section["align"]) 
         total = section["size"] / section["entsize"]
         symtab = []
         symtab_append = symtab.append 
+        section_name = section["name"]
         for entry in range(total): 
             sym_name = string_to_unsigned(_read(ELF32)) 
             if not sym_name:
                 sym_name = "unknown"
-            elif flag == 1:
+            elif section_name == ".symtab":
                 sym_name = strtab[sym_name]
-            elif not flag == 2:
+            elif section_name == ".dynsym": 
                 sym_name = dynsym[sym_name] 
             #name ,bind , type, vis, index, value, size
             if elf_type == ELFCLASS32:
@@ -1134,8 +1125,9 @@ def read_symtab(buffer):
                 symtab_append((sym_name, st_info >> 4,  st_info & 0xf,
                     st_other, st_shndx, st_value, st_size))
             else:
-                info = string_to_unsigned(sym_read(ELF8)) 
-                symtab_append((sym_name, info >> 4,  info & 0xf,
+                st_info = string_to_unsigned(sym_read(ELF8)) 
+                symtab_append((sym_name, st_info >> 4,
+                    st_info & 0xf,
                     string_to_unsigned(sym_read(ELF8)), 
                     string_to_unsigned(sym_read(ELF16)), 
                     string_to_unsigned(sym_read(ELF64)), 
@@ -1147,6 +1139,57 @@ def read_symtab(buffer):
 
 def read_rela(buffer):
     sections = elf["sections"] 
+    rel_list = []
+    for section in sections:
+        if section["type"] == SHT_REL:
+            rel_list.append(section) 
+    elf_type = elf["elf_header"]["file_class"]
+    symtab = elf["symtabs"][".dynsym"]
+    elf["rel"] = {}
+    for rel in rel_list:
+        r1_list = []
+        buffer.seek(rel["offset"])
+        if elf_type == ELFCLASS32:
+            for i in range(rel["size"] / rel["entsize"]):
+                r_offset = string_to_unsigned(_read(ELF32))
+                r_info = string_to_unsigned(_read(ELF32))
+                r1_list.append((r_offset, r_info >> 8, r_info & 0xff))
+        else:
+            for i in range(rel["size"] / rel["entsize"]):
+                r_offset = string_to_unsigned(_read(ELF64))
+                r_info = string_to_unsigned(_read(ELF64))
+                r1_list.append((r_offset, r_info >> 32,
+                    r_info & 0xffffffff))
+        elf["rel"][rel["name"]] = r1_list
+    if not elf["rel"]:
+        del elf["rel"]
+    
+    rela_list = []
+    for section in sections:
+        if section["type"] == SHT_RELA:
+            rela_list.append(section) 
+    elf["rela"] = {}
+    for rela in rela_list:
+        r2_list = []
+        buffer.seek(rela["offset"])
+        if elf_type == ELFCLASS32:
+            for i in range(rela["size"] / rela["entsize"]):
+                r_offset = string_to_unsigned(_read(ELF32))
+                r_info = string_to_unsigned(_read(ELF32))
+                r_addend = string_to_signed(_read(ELF32))
+                r2_list.append((r_offset, r_info >> 8,
+                    r_info & 0xff, r_addend))
+        else:
+            for i in range(rela["size"] / rela["entsize"]):
+                r_offset = string_to_unsigned(_read(ELF64))
+                r_info = string_to_unsigned(_read(ELF64))
+                r_addend = string_to_signed(_read(ELF64))
+                r2_list.append((r_offset, r_info >> 32,
+                    r_info & 0xffffffff, r_addend)) 
+        elf["rela"][rela["name"]] = r2_list
+    if not elf["rela"]:
+        del elf["rela"]        
+    
 
 def read_dynamic(buffer): 
     sections = elf["sections"]
@@ -1453,17 +1496,11 @@ def read_debugabbr(buffer):
     buffer.seek(debug_abbr["offset"])
  
 def set_target(path, flags): 
-    if flags & ELF_HEADER:
-        pass
-    elif flags & ELF_SYMBOL:
-        flags |= ELF_HEADER
-    elif flags & ELF_DYNAMIC:
-        flags |= ELF_HEADER
-    elif flags & DWARF_INFO:
-        flags |= ELF_HEADER 
-        #flags |= ELF_SYMBOL
-    else:        
-        return None 
+    flags |= ELF_HEADER 
+    if flags & ELF_RELA:
+        flags |= ELF_SYMBOL
+    if flags & ELF_DYNAMIC:
+        flags |= ELF_SYMBOL
     global elf 
     global _read
     elf = {
@@ -1491,8 +1528,10 @@ def set_target(path, flags):
     if flags & ELF_DYNAMIC:
         #print_mem_usage("after symtab")
         read_dynamic(buffer) 
+    if flags & ELF_RELA:
+        read_rela(buffer)
     if flags & DWARF_INFO: 
-        read_debuginfo(buffer)
+        read_debuginfo(buffer) 
     buffer.close()
     f.close()
     return elf

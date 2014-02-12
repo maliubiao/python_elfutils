@@ -1,18 +1,19 @@
 #! /usr/bin/env python
 import os
 import sys 
-import getopt
+import getopt 
 import os.path
 import elfutils
 #import cProfile
 
 
 def print_usage():
-    print("usage: readelf.py exectuable")
+    print("usage: readelf.py [option] exectuable")
     print """Options are:
     -d Display the dynamic section (if present)
     -h Display the ELF file header
     -l Display the program headers
+    -r Display the relocations (if present)
     -S Display the section's header
     -s Display the symbol table 
     """
@@ -45,6 +46,7 @@ def print_symbol(elf):
     type_table = elfutils.sym_type 
     bind_type_table = elfutils.sym_bind_type
     vis_type_table = elfutils.sym_vis_type
+    pdb.set_trace()
     for symtab in symtabs:
         print "in", symtab
         print of.format("addr", "type", "visiblity", "bind", "name")
@@ -117,12 +119,34 @@ def print_header(elf):
     print of.format("section entry number:", header['e_shnum'])
     print of.format("index of .strtab:", header['e_shstrndx'])
     
+def print_rela(elf):
+    symtab = elf["symtabs"][".dynsym"] 
+    rel_type = elfutils.rel_type
+    if "rel" in elf:
+        of = "{:<15}{:<20}{:<10}{:<10}" 
+        for name, rel in elf["rel"].iteritems(): 
+            print "in", name
+            print of.format("offset", "type", "Sym.Index",  "Sym.Name") 
+            for item in rel: 
+                print of.format(hex(item[0]), rel_type[item[2]],
+                        item[1], symtab[item[1]][0])
+    if "rela" in elf:       
+        of = "{:<10}{:<15}{:<10}{:<10}{:<10}" 
+        for name, rela in elf["rela"].iteritems(): 
+            print "in", name 
+            print of.format("offset", "type", "Addend",
+                    "Sym.Index", "Sym.Name") 
+            for item in rela: 
+                print of.format(hex(item[0]), rel_type[item[2]],
+                        item[3], item[1], symtab[item[1]][0]) 
+
 def print_dwarf_info(elf):
     pass
 
+
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dhlsSw:")
+        opts, args = getopt.getopt(sys.argv[1:], "dhlrsSw:")
     except getopt.GetoptError, err:        
         print str(err)
         print_usage() 
@@ -137,42 +161,47 @@ def main():
     sheader =False
     symbol = False 
     dwarf_info = False
+    rela = False
+    flags = 0
     for o, a in opts:
         if o == "--help":
             print_usage()
         elif o == "-d":
             dynamic = True
+            flags |= elfutils.ELF_DYNAMIC
         elif o == "-h":  
             header = True
         elif o == "-l":
             pheader = True
         elif o == "-s":
             symbol = True
+            flags |= elfutils.ELF_SYMBOL
         elif o == "-S":
             sheader = True 
         elif o == "-w":
             if a == "i":
                 dwarf_info = True 
+                flags |= elfutils.DWARF_INFO
+        elif o == "-r":
+            rela = True
+            flags |= elfutils.ELF_RELA
         else:
             assert False, "unhandled options" 
     #cProfile.runctx("elfutils.set_target(path)", globals(), locals(), "readelf.trace")    
-    if dynamic:
-        elf = elfutils.set_target(path, elfutils.ELF_DYNAMIC)
+    elf = elfutils.set_target(path, flags)
+    if dynamic: 
         print_dynamic(elf)
     if header: 
-        elf = elfutils.set_target(path, elfutils.ELF_HEADER)
         print_header(elf)
     if pheader: 
-        elf = elfutils.set_target(path, elfutils.ELF_HEADER)
         print_pheader(elf)
     if sheader: 
-        elf = elfutils.set_target(path, elfutils.ELF_HEADER)
         print_sheader(elf)
     if symbol: 
-        elf = elfutils.set_target(path, elfutils.ELF_SYMBOL)
         print_symbol(elf)
+    if rela: 
+        print_rela(elf)
     if dwarf_info: 
-        elf = elfutils.set_target(path, elfutils.DWARF_INFO)
         print_dwarf_info(elf)
 
 if __name__ == "__main__":

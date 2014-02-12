@@ -3,11 +3,12 @@ python-elfutils
 #Demo 
 ```shell
 python readelf.py --help 
-usage: readelf.py exectuable
+usage: readelf.py [option] exectuable
 Options are:
     -d Display the dynamic section (if present)
     -h Display the ELF file header
     -l Display the program headers
+    -r Display the relocations (if present)
     -S Display the section's header
     -s Display the symbol table 
 ```		
@@ -253,6 +254,38 @@ addr           type      visiblity bind      name
 0x0            FUNC      DEFAULT   WEAK      __cxa_finalize@@GLIBC_2.2.5
 0x828          FUNC      DEFAULT   GLOBAL    _init         
 ``` 
-```shell
-
+```shell 
+python readelf.py -r baseutils.so 
+in .rela.plt
+offset    type           Addend    Sym.Index Sym.Name  
+0x202018  R_386_JMP_SLOT 0         2         PyDict_SetItemString
+0x202020  R_386_JMP_SLOT 0         4         Py_InitModule4_64
+0x202028  R_386_JMP_SLOT 0         5         PyErr_SetString
+0x202030  R_386_JMP_SLOT 0         7         __gmon_start__
+0x202038  R_386_JMP_SLOT 0         8         PyString_Size
+0x202040  R_386_JMP_SLOT 0         9         PyArg_ParseTuple
+0x202048  R_386_JMP_SLOT 0         11        PyDict_New
+0x202050  R_386_JMP_SLOT 0         12        PyInt_FromLong
+0x202058  R_386_JMP_SLOT 0         15        __cxa_finalize
+in .rela.dyn
+offset    type           Addend    Sym.Index Sym.Name  
+0x201dc0  R_386_RELATIVE 2736      0         unknown   
+0x201dc8  R_386_RELATIVE 2672      0         unknown   
+0x202060  R_386_RELATIVE 2105440   0         unknown   
+0x2020e0  R_386_RELATIVE 3572      0         unknown   
+0x2020e8  R_386_RELATIVE 3216      0         unknown   
+0x2020f8  R_386_RELATIVE 2105472   0         unknown   
+0x202100  R_386_RELATIVE 3503      0         unknown   
+0x202108  R_386_RELATIVE 3008      0         unknown   
+0x202118  R_386_RELATIVE 2105504   0         unknown   
+0x202120  R_386_RELATIVE 3601      0         unknown   
+0x202128  R_386_RELATIVE 2784      0         unknown   
+0x202138  R_386_RELATIVE 2105536   0         unknown   
+0x201fc8  R_386_GLOB_DAT 0         3         _ITM_deregisterTMCloneTable
+0x201fd0  R_386_GLOB_DAT 0         6         PyExc_TypeError
+0x201fd8  R_386_GLOB_DAT 0         7         __gmon_start__
+0x201fe0  R_386_GLOB_DAT 0         10        PyExc_AssertionError
+0x201fe8  R_386_GLOB_DAT 0         13        _Jv_RegisterClasses
+0x201ff0  R_386_GLOB_DAT 0         14        _ITM_registerTMCloneTable
+0x201ff8  R_386_GLOB_DAT 0         15        __cxa_finalize
 ```
