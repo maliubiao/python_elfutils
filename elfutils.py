@@ -1,6 +1,5 @@
 import os
 import mmap 
-import pdb
 import io
 from cStringIO import StringIO
 from baseutils import string_to_unsigned
@@ -20,6 +19,90 @@ ELF64 = 8
 ELF32 = 4
 ELF16 = 2
 ELF8 = 1
+
+
+Elf32_Ehdr = {
+    "e_ident": ELF8,
+    "e_type": ELF16,
+    "e_machine": ELF16,
+    "e_version": ELF32,
+    "e_entry": ELF32,
+    "e_phoff": ELF32,
+    "e_shoff": ELF32,
+    "e_flags": ELF32,
+    "e_ehsize": ELF16,
+    "e_phentsize": ELF16,
+    "e_phnum": ELF16,
+    "e_shentsize": ELF16,
+    "e_shnum": ELF16,
+    "e_shstrndx": ELF16
+    }
+
+Elf64_Ehdr = {
+        "e_ident": ELF8,
+        "e_type": ELF16,
+        "e_machine": ELF16,
+        "e_version": ELF32,
+        "e_entry": ELF64,
+        "e_phoff": ELF64,
+        "e_shoff": ELF64,
+        "e_flags": ELF32,
+        "e_ehsize": ELF16,
+        "e_phentsize": ELF16,
+        "e_phnum": ELF16,
+        "e_shentsize": ELF16,
+        "e_shnum": ELF16,
+        "e_shstrndx": ELF16
+        }
+        
+
+Elf32_Shdr = {
+        "sh_name": ELF32,
+        "sh_type": ELF32,
+        "sh_flags": ELF32,
+        "sh_addr": ELF32,
+        "sh_offset": ELF32,
+        "sh_size": ELF32,
+        "sh_link": ELF32,
+        "sh_info": ELF32,
+        "sh_addralign": ELF32,
+        "sh_entsize": ELF32
+        }
+
+Elf64_Shdr = {
+        "sh_name": ELF32,
+        "sh_type": ELF32,
+        "sh_flags": ELF64,
+        "sh_addr": ELF64,
+        "sh_offset": ELF64,
+        "sh_size": ELF64,
+        "sh_link": ELF32,
+        "sh_info": ELF32,
+        "sh_addralign": ELF64,
+        "sh_entsize": ELF64
+        }
+
+Elf32_Phdr = {
+        "p_type": ELF32,
+        "p_offset": ELF32,
+        "p_vaddr": ELF32,
+        "p_paddr": ELF32,
+        "p_filesz": ELF32,
+        "p_memsz": ELF32,
+        "p_flags": ELF32,
+        "p_align": ELF32
+        }
+
+Elf64_Phdr = {
+        "p_type": ELF32,
+        "p_flags": ELF32,
+        "p_offset": ELF64,
+        "p_vaddr": ELF64,
+        "p_paddr": ELF64,
+        "p_filesz": ELF64,
+        "p_memsz": ELF64,
+        "p_align": ELF64
+        }
 
 
 HIGHBITMASK = 0b1111111
@@ -858,24 +941,31 @@ def read_header(buffer):
     elf_header = elf['elf_header']
     elf_header["file_ident"] = _read(ELF32)
     assert elf_header["file_ident"] == ELFSIG
-    elf_header["file_class"] = string_to_unsigned(_read(ELF8))
+    file_class = string_to_unsigned(_read(ELF8)) 
+    if file_class == ELFCLASS32:
+        ehdr = Elf32_Ehdr
+    elif file_class == ELFCLASS64:
+        ehdr = Elf64_Ehdr
+    else:
+        raise Exception("Unknown ELFCLASS: %d", file_class)
+    elf_header["file_class"] = file_class
     elf_header["file_encoding"] = string_to_unsigned(_read(ELF8))
     elf_header["file_version"] = string_to_unsigned(_read(ELF8)) 
     #ignore 9 bytes
     buffer.seek(9, io.SEEK_CUR)
-    elf_header["e_type"] = string_to_unsigned(_read(ELF16))
-    elf_header["e_machine"] = string_to_unsigned(_read(ELF16))
-    elf_header["e_version"] = string_to_unsigned(_read(ELF32))
-    elf_header["e_entry"] = string_to_unsigned(_read(ELF64))
-    elf_header["e_phoff"] = string_to_unsigned(_read(ELF64))
-    elf_header["e_shoff"] = string_to_unsigned(_read(ELF64))
-    elf_header["e_flags"] = string_to_unsigned(_read(ELF32))
-    elf_header["e_ehsize"] = string_to_unsigned(_read(ELF16))
-    elf_header["e_phentsize"] = string_to_unsigned(_read(ELF16))
-    elf_header["e_phnum"] = string_to_unsigned(_read(ELF16))
-    elf_header["e_shentsize"] = string_to_unsigned(_read(ELF16))
-    elf_header["e_shnum"] = string_to_unsigned(_read(ELF16))
-    elf_header["e_shstrndx"] = string_to_unsigned(_read(ELF16))
+    elf_header["e_type"] = string_to_unsigned(_read(ehdr["e_type"]))
+    elf_header["e_machine"] = string_to_unsigned(_read(ehdr["e_machine"]))
+    elf_header["e_version"] = string_to_unsigned(_read(ehdr["e_version"]))
+    elf_header["e_entry"] = string_to_unsigned(_read(ehdr["e_entry"]))
+    elf_header["e_phoff"] = string_to_unsigned(_read(ehdr["e_phoff"]))
+    elf_header["e_shoff"] = string_to_unsigned(_read(ehdr["e_shoff"]))
+    elf_header["e_flags"] = string_to_unsigned(_read(ehdr["e_flags"]))
+    elf_header["e_ehsize"] = string_to_unsigned(_read(ehdr["e_ehsize"]))
+    elf_header["e_phentsize"] = string_to_unsigned(_read(ehdr["e_phentsize"]))
+    elf_header["e_phnum"] = string_to_unsigned(_read(ehdr["e_phnum"]))
+    elf_header["e_shentsize"] = string_to_unsigned(_read(ehdr["e_shentsize"]))
+    elf_header["e_shnum"] = string_to_unsigned(_read(ehdr["e_shnum"]))
+    elf_header["e_shstrndx"] = string_to_unsigned(_read(ehdr["e_shstrndx"]))
 
 def read_section_header(buffer):
     elf_header = elf["elf_header"]
@@ -884,18 +974,22 @@ def read_section_header(buffer):
     buffer.seek(e_shoff)
     e_shnum = elf_header["e_shnum"]
     e_shentsize = elf_header["e_shentsize"] 
+    if elf_header["file_class"] == ELFCLASS32:
+        shdr = Elf32_Shdr
+    else:
+        shdr = Elf64_Shdr 
     for num in range(e_shnum):    
         sections.append({
-            "name": string_to_unsigned(_read(ELF32)),
-            "type": string_to_unsigned(_read(ELF32)),
-            "flag": string_to_unsigned(_read(ELF64)),
-            "addr": string_to_unsigned(_read(ELF64)),
-            "offset": string_to_unsigned(_read(ELF64)),
-            "size": string_to_unsigned(_read(ELF64)),
-            "link": string_to_unsigned(_read(ELF32)),
-            "info": string_to_unsigned(_read(ELF32)),
-            "align": string_to_unsigned(_read(ELF64)),
-            "entsize": string_to_unsigned(_read(ELF64))
+            "name": string_to_unsigned(_read(shdr["sh_name"])),
+            "type": string_to_unsigned(_read(shdr["sh_type"])),
+            "flag": string_to_unsigned(_read(shdr["sh_flags"])),
+            "addr": string_to_unsigned(_read(shdr["sh_addr"])),
+            "offset": string_to_unsigned(_read(shdr["sh_offset"])),
+            "size": string_to_unsigned(_read(shdr["sh_size"])),
+            "link": string_to_unsigned(_read(shdr["sh_link"])),
+            "info": string_to_unsigned(_read(shdr["sh_info"])),
+            "align": string_to_unsigned(_read(shdr["sh_addralign"])),
+            "entsize": string_to_unsigned(_read(shdr["sh_entsize"]))
         })
 
 
@@ -905,16 +999,32 @@ def read_program_header(buffer):
     buffer.seek(elf_header["e_phoff"])
     e_phnum = elf_header["e_phnum"] 
     e_phentsize = elf_header["e_phentsize"]
+    if elf_header["file_class"] == ELFCLASS32:
+        phdr = Elf32_Phdr
+    else:
+        phdr = Elf64_Phdr 
+    elf_type = elf_header["file_class"]
     for num in range(e_phnum):
+        p_type = string_to_unsigned(_read(phdr["p_type"])) 
+        if elf_type == ELFCLASS64: 
+            p_flags = string_to_unsigned(_read(phdr["p_flags"]))
+        p_offset = string_to_unsigned(_read(phdr["p_offset"]))
+        p_vaddr = string_to_unsigned(_read(phdr["p_vaddr"]))
+        p_paddr = string_to_unsigned(_read(phdr["p_paddr"]))
+        p_filesz = string_to_unsigned(_read(phdr["p_filesz"]))
+        p_memsz = string_to_unsigned(_read(phdr["p_memsz"]))
+        if elf_type == ELFCLASS32:
+            p_flags = string_to_unsigned(_read(phdr["p_flags"]))
+        p_align = string_to_unsigned(_read(phdr["p_align"]));
         entry = {
-            "type": string_to_unsigned(_read(ELF32)),
-            "flag": string_to_unsigned(_read(ELF32)),
-            "offset": string_to_unsigned(_read(ELF64)),
-            "virt": string_to_unsigned(_read(ELF64)),
-            "phys": string_to_unsigned(_read(ELF64)),
-            "filesize": string_to_unsigned(_read(ELF64)),
-            "memsize": string_to_unsigned(_read(ELF64)),
-            "align": string_to_unsigned(_read(ELF64))
+            "type": p_type,
+            "flags": p_flags,
+            "offset": p_offset,
+            "virt": p_vaddr,
+            "phys": p_paddr,
+            "filesize": p_filesz,
+            "memsize": p_memsz,
+            "align": p_align
             }
         #INTERP
         if entry['type'] == PT_INTERP:
@@ -992,6 +1102,9 @@ def read_symtab(buffer):
             symtab_sections.append(section) 
         if section["type"] == SHT_DYNSYM:
             symtab_sections.append(section)
+    #use local alias
+    sym_read = _read
+    elf_type = elf["elf_header"]["file_class"]
     for section in symtab_sections: 
         flag = 0
         if section["name"] == ".symtab":
@@ -999,27 +1112,36 @@ def read_symtab(buffer):
         elif section["name"] == ".dynsym":
             flag = 2
         buffer.seek(section["offset"]) 
-        sym_read = _read 
         extra = section["align"] - (section["entsize"] / section["align"]) 
         total = section["size"] / section["entsize"]
         symtab = []
         symtab_append = symtab.append 
         for entry in range(total): 
-            sym_name = string_to_unsigned(sym_read(ELF32)) 
+            sym_name = string_to_unsigned(_read(ELF32)) 
             if not sym_name:
                 sym_name = "unknown"
             elif flag == 1:
                 sym_name = strtab[sym_name]
             elif not flag == 2:
-                sym_name = dynsym[sym_name]
-            info = string_to_unsigned(sym_read(ELF8)) 
+                sym_name = dynsym[sym_name] 
             #name ,bind , type, vis, index, value, size
-            symtab_append((sym_name, info >> 4,  info & 0xf,
-                string_to_unsigned(sym_read(ELF8)), 
-                string_to_unsigned(sym_read(ELF16)), 
-                string_to_unsigned(sym_read(ELF64)), 
-                string_to_unsigned(sym_read(ELF64))
-                ))
+            if elf_type == ELFCLASS32:
+                st_value = string_to_unsigned(sym_read(ELF32))
+                st_size = string_to_unsigned(sym_read(ELF32))
+                st_info = string_to_unsigned(sym_read(ELF8))
+                st_other = string_to_unsigned(sym_read(ELF8))
+                st_shndx = string_to_unsigned(sym_read(ELF16))
+                symtab_append((sym_name, st_info >> 4,  st_info & 0xf,
+                    st_other, st_shndx, st_value, st_size))
+            else:
+                info = string_to_unsigned(sym_read(ELF8)) 
+                symtab_append((sym_name, info >> 4,  info & 0xf,
+                    string_to_unsigned(sym_read(ELF8)), 
+                    string_to_unsigned(sym_read(ELF16)), 
+                    string_to_unsigned(sym_read(ELF64)), 
+                    string_to_unsigned(sym_read(ELF64))
+                    ))
+
         symtabs[section["name"]] = symtab                     
         #sym_data.close() 
 
@@ -1035,12 +1157,21 @@ def read_dynamic(buffer):
     dynamic_list = elf["dynamic"]
     buffer.seek(dynamic["offset"])
     total = dynamic["size"] / dynamic["entsize"] 
-    for entry in range(total):
-        d_tag = string_to_unsigned(_read(ELF64))
-        value = string_to_unsigned(_read(ELF64)) 
-        dynamic_list.append({d_tag: value})    
-        if not d_tag:
-            break
+    if elf["elf_header"]["file_class"] == ELFCLASS32: 
+        for entry in range(total):
+            d_tag = string_to_signed(_read(ELF32))
+            value = string_to_unsigned(_read(ELF32)) 
+            dynamic_list.append({d_tag: value})    
+            if not d_tag:
+                break
+    else:
+        for entry in range(total):
+            d_tag = string_to_signed(_read(ELF64))
+            value = string_to_unsigned(_read(ELF64)) 
+            dynamic_list.append({d_tag: value})    
+            if not d_tag:
+                break
+
     in_symtab = [DT_NEEDED, DT_SONAME, DT_RPATH]     
     strtab = elf["strtabs"][".strtab"]
     dyntab = elf["strtabs"][".dynstr"]
@@ -1088,6 +1219,7 @@ def encode_unsigned_leb(integer):
         pc.write(chr(integer >> (bits_count - bits_count % 7))) 
         
     final = pc.getvalue()
+    pc.close()
     return final
     
 

@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 import os
-import sys
+import sys 
 import getopt
 import os.path
 import elfutils
@@ -62,8 +62,11 @@ def print_pheader(elf):
     of = "{:<10}{:<10}{:<10}{:<10}{:<10}{:<10}{:<10}{:<5}" 
     print of.format("Type", "Align", "Offset", "VirtAddr", "PhysAddr", "FileSize", "MemSize", "Flags")
     for entry in pheader:
-        ptype = elfutils.ph_type[entry['type']].split("_")[-1]
-        flag = elfutils.ph_flags[entry['flag']]
+        try:
+            ptype = elfutils.ph_type[entry['type']].split("_")[-1]
+        except:
+            pdb.set_trace()
+        flag = elfutils.ph_flags[entry['flags']]
         offset = hex(entry['offset'])
         virt = hex(entry['virt'])
         phys = hex(entry['phys'])
