@@ -1,6 +1,7 @@
 import os
 import mmap 
 import io 
+import pdb
 from cStringIO import StringIO
 from baseutils import string_to_unsigned
 from baseutils import string_to_signed
@@ -1233,14 +1234,15 @@ def read_dynamic(buffer):
             entry[d_tag] = name 
 
 def decode_unsigned_leb(buffer):
-    l = 1L
+    l = 0L
     while True: 
         part = ord(buffer.read(1)) 
-        #remove the hight order
-        l += part & 0x7f << 7 
         #stream end, high order is 0
         if not part & 0x80:
+            l += part
             break 
+        #remove the hight order 
+        l += (l << 7 + part & 0x7f)
     return l
 
 def encode_unsigned_leb(integer):
@@ -1290,32 +1292,33 @@ def read_debuginfo(buffer):
         buffer.seek(string_to_unsigned(_read(ELF32)), 1) 
     cus = [] 
     for cu_addr in cu_addrs:    
-        print "cu_addr:", hex(cu_addr)
         buffer.seek(cu_addr) 
-        unit_length = string_to_signed(_read(ELF32))
-        version = string_to_signed(_read(ELF16)) 
-        abbrev_offset = string_to_signed(_read(ELF32))
-        addr_size = string_to_signed(_read(ELF8))
-        abbr_num = string_to_signed(_read(ELF8)) 
+        unit_length = string_to_unsigned(_read(ELF32))
+        version = string_to_unsigned(_read(ELF16)) 
+        abbrev_offset = string_to_unsigned(_read(ELF32))
+        addr_size = string_to_signed(_read(ELF8)) 
         cus.append({
             "length": unit_length,
             "version": version,
             "abbrev_offset": abbrev_offset,
-            "addr_size": addr_size,
-            "abbr_num": abbr_num,
+            "addr_size": addr_size, 
             "data_formats": [],
             "data_offset": buffer.tell(),
             "data": {},
             }) 
-    for cu in cus:
+
+    #read CU Only
+    for cu in cus: 
         buffer.seek(cu["abbrev_offset"]+debug_abbrev["offset"]) 
-        #buffer.seek(3, 1)
-        
-        while True:        
-            attr_type = string_to_unsigned(_read(ELF8))
-            attr_form = string_to_unsigned(_read(ELF8))
-            if not attr_type:
-                break
+        abbrev = decode_unsigned_leb(buffer) 
+        tag_name = TAG_types[decode_unsigned_leb(buffer)] 
+        chldren = _read(1) 
+        while True:
+            attr_type = decode_unsigned_leb(buffer)
+            attr_form = decode_unsigned_leb(buffer)
+            #attr list end
+            if not (attr_type or attr_form):
+                break 
             print AT_types[attr_type], FORM_types[attr_form] 
             cu["data_formats"].append((attr_type, attr_form)) 
     found_str = False
@@ -1326,6 +1329,7 @@ def read_debuginfo(buffer):
     for cu in cus:
         buffer.seek(cu["data_offset"])
         formats = cu["data_formats"]
+        abbrev = decode_unsigned_leb(buffer)
         for df in formats:
             length = attr_form_to_len[df[1]] 
             value = None 
@@ -1341,16 +1345,18 @@ def read_debuginfo(buffer):
                 value = strbuffer.getvalue()
                 strbuffer.close()
             elif length == 0xfff2:
-                value = string_to_unsigned(_read(ELF64))
+                value = decode_unsigned_leb(buffer)
             elif length == 0xfff3:
-                value = string_to_unsigned(_read(ELF64))
+                value = decode_unsigned_leb(buffer)
             if df[0] == 0x03:
                 if found_str and (df[1] == 0x0e):
                     value = strtab[value]
             cu["data"][df[0]] = value 
         print cu
+        """
         if 0x10 in cu["data"]: 
             read_debugline(buffer, debug_line["offset"], cu)
+        """
     elf["compile_units"] = cus        
 
 def read_debugline(buffer,debugline_offset, cu):
