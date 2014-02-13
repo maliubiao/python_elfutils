@@ -1242,8 +1242,8 @@ def decode_unsigned_leb(buffer):
             l += part
             break 
         #remove the hight order 
-        l += (l << 7 + part & 0x7f)
-    return l
+        l = l << 7 + part & 0x7f
+    return l 
 
 def encode_unsigned_leb(integer):
     pc = StringIO()
@@ -1262,34 +1262,35 @@ def encode_unsigned_leb(integer):
             pc.write(chr(val | 0x80))
     if bits_count % 7:
         pc.write(chr(integer >> (bits_count - bits_count % 7))) 
-        
     final = pc.getvalue()
     pc.close()
     return final
     
 
 def read_debuginfo(buffer):
+    #sanity check
     sections = elf["sections"] 
     section_names = [x["name"] for x in sections]
     debug_sections = {}
-    debug_list = [".debug_info", ".debug_abbrev",
-            ".debug_str", ".debug_line"]
+    debug_list = [".debug_info", ".debug_abbrev", ".debug_str", ".debug_line"]
     for i in debug_list:
         if i not in section_names:
             raise Exception("where is section: %s" % i) 
     debug_info = sections[section_names.index(debug_list[0])] 
     debug_abbrev = sections[section_names.index(debug_list[1])]
     debug_str =sections[section_names.index(debug_list[2])]
-    debug_line = sections[section_names.index(debug_list[3])]
-    buffer.seek(debug_info["offset"])
+    debug_line = sections[section_names.index(debug_list[3])] 
+    #get CU addr list
     cu_addrs = []
     section_end = debug_info["offset"] + debug_info["size"] 
+    buffer.seek(debug_info["offset"])
     while True:
         cur = buffer.tell()
         if cur >= section_end: 
             break
         cu_addrs.append(cur) 
         buffer.seek(string_to_unsigned(_read(ELF32)), 1) 
+    #read CU header
     cus = [] 
     for cu_addr in cu_addrs:    
         buffer.seek(cu_addr) 
@@ -1307,20 +1308,47 @@ def read_debuginfo(buffer):
             "data": {},
             }) 
 
-    #read CU Only
+    #read tag tree in a CU
+    tree = [] 
     for cu in cus: 
         buffer.seek(cu["abbrev_offset"]+debug_abbrev["offset"]) 
-        abbrev = decode_unsigned_leb(buffer) 
-        tag_name = TAG_types[decode_unsigned_leb(buffer)] 
-        chldren = _read(1) 
-        while True:
-            attr_type = decode_unsigned_leb(buffer)
-            attr_form = decode_unsigned_leb(buffer)
-            #attr list end
-            if not (attr_type or attr_form):
-                break 
-            print AT_types[attr_type], FORM_types[attr_form] 
-            cu["data_formats"].append((attr_type, attr_form)) 
+        level = []
+        cur = [[], [], tree] 
+        levels = [level] 
+        while True: 
+            abbrev = decode_unsigned_leb(buffer) 
+            #NULL entry, siblings end
+            if not abbrev:
+                #back to father, break if no father 
+                if not cur[2]:
+                    break
+                level = cur[2] 
+                continue
+            tag_name = TAG_types[decode_unsigned_leb(buffer)] 
+            children = string_to_unsigned(_read(1))
+            #[[self], [children], father] 
+            attrs = []
+            cur[0].extend([abbrev, tag_name,  children, attrs]) 
+            #read attrs
+            while True:
+                attr_type = decode_unsigned_leb(buffer)
+                attr_form = decode_unsigned_leb(buffer)
+                #attr list end
+                if not (attr_type or attr_form): 
+                    break 
+                print AT_types[attr_type], FORM_types[attr_form] 
+                attrs.append((attr_type, attr_form)) 
+            level.append(cur)
+            if children:
+                #add children 
+                level = cur[1] 
+                levels.append(level)
+                #remember father 
+                cur = [[], [], cur] 
+            else:
+                cur = [[], [], []] 
+        tree.append(levels) 
+    pdb.set_trace()
     found_str = False
     strtab = None
     if not isinstance(debug_str, str):
@@ -1335,6 +1363,7 @@ def read_debuginfo(buffer):
             value = None 
             if length < 0xfff1:
                 value = string_to_unsigned(_read(length)) 
+            #c string
             elif length == 0xfff1:
                 strbuffer = StringIO()
                 while True:
@@ -1344,15 +1373,17 @@ def read_debuginfo(buffer):
                     strbuffer.write(c) 
                 value = strbuffer.getvalue()
                 strbuffer.close()
+            #uleb
             elif length == 0xfff2:
                 value = decode_unsigned_leb(buffer)
+            #sleb
             elif length == 0xfff3:
                 value = decode_unsigned_leb(buffer)
-            if df[0] == 0x03:
-                if found_str and (df[1] == 0x0e):
+            #in strtab
+            if df[0] == DW_AT_name:
+                if found_str and (df[1] == DW_FORM_strp):
                     value = strtab[value]
             cu["data"][df[0]] = value 
-        print cu
         """
         if 0x10 in cu["data"]: 
             read_debugline(buffer, debug_line["offset"], cu)
