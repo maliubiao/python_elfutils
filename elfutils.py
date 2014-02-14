@@ -1234,12 +1234,12 @@ def read_dynamic(buffer):
             entry[d_tag] = name 
 
 def decode_unsigned_leb(buffer):
-    l = 0L
+    l = 0L 
     while True: 
         part = ord(buffer.read(1)) 
         #stream end, high order is 0
         if not part & 0x80:
-            l += part
+            l = (l << 7) + part
             break 
         #remove the hight order 
         l = l << 7 + part & 0x7f
@@ -1267,19 +1267,22 @@ def encode_unsigned_leb(integer):
     return final
     
 
-def read_debuginfo(buffer):
-    #sanity check
-    sections = elf["sections"] 
-    section_names = [x["name"] for x in sections]
-    debug_sections = {}
-    debug_list = [".debug_info", ".debug_abbrev", ".debug_str", ".debug_line"]
-    for i in debug_list:
+def has_sections(debug_list, section_names):
+    ret = True
+    for d in debug_list:
         if i not in section_names:
-            raise Exception("where is section: %s" % i) 
-    debug_info = sections[section_names.index(debug_list[0])] 
-    debug_abbrev = sections[section_names.index(debug_list[1])]
-    debug_str =sections[section_names.index(debug_list[2])]
-    debug_line = sections[section_names.index(debug_list[3])] 
+            ret = False
+            break 
+    return ret
+
+def get_sections(name_list, sections):
+    ret_list = []
+    section_names = [x["name"] for x in sections] 
+    for n in name_list:
+        ret_list.append(sections[section_names.index(name)])
+    return ret_list
+
+def get_CU_offsets(buffer, debug_info): 
     #get CU addr list
     cu_addrs = []
     section_end = debug_info["offset"] + debug_info["size"] 
@@ -1290,15 +1293,17 @@ def read_debuginfo(buffer):
             break
         cu_addrs.append(cur) 
         buffer.seek(string_to_unsigned(_read(ELF32)), 1) 
-    #read CU header
-    cus = [] 
+    return cu_addrs
+
+def read_CU_headers(buffer, cu_addrs):
+    cu_headers = [] 
     for cu_addr in cu_addrs:    
         buffer.seek(cu_addr) 
         unit_length = string_to_unsigned(_read(ELF32))
         version = string_to_unsigned(_read(ELF16)) 
         abbrev_offset = string_to_unsigned(_read(ELF32))
         addr_size = string_to_signed(_read(ELF8)) 
-        cus.append({
+        cu_headers.append({
             "length": unit_length,
             "version": version,
             "abbrev_offset": abbrev_offset,
@@ -1307,13 +1312,13 @@ def read_debuginfo(buffer):
             "data_offset": buffer.tell(),
             "data": {},
             }) 
+    return cu_headers
 
-    #read tag tree in a CU
-    tree = [] 
-    for cu in cus: 
+def read_CU_format_tree(buffer, cu_headers):
+    for cu in cu_headers: 
         buffer.seek(cu["abbrev_offset"]+debug_abbrev["offset"]) 
         level = []
-        cur = [[], [], tree] 
+        cur = [[], [], []] 
         levels = [level] 
         while True: 
             abbrev = decode_unsigned_leb(buffer) 
@@ -1347,48 +1352,83 @@ def read_debuginfo(buffer):
                 cur = [[], [], cur] 
             else:
                 cur = [[], [], []] 
-        tree.append(levels) 
-    pdb.set_trace()
-    found_str = False
-    strtab = None
-    if not isinstance(debug_str, str):
-        strtab = build_strtab(buffer, debug_str)        
-        found_str = True
-    for cu in cus:
+        cu["data_formats"] = levels
+    return cu_headers
+
+def read_CU_data_tree(buffer, cu_headers, debug_str): 
+    strtab = build_strtab(buffer, debug_str)        
+    for cu in cu_headers:
         buffer.seek(cu["data_offset"])
         formats = cu["data_formats"]
-        abbrev = decode_unsigned_leb(buffer)
-        for df in formats:
-            length = attr_form_to_len[df[1]] 
-            value = None 
-            if length < 0xfff1:
-                value = string_to_unsigned(_read(length)) 
-            #c string
-            elif length == 0xfff1:
-                strbuffer = StringIO()
-                while True:
-                    c = _read(ELF8)
-                    if c=="\x00":
-                        break
-                    strbuffer.write(c) 
-                value = strbuffer.getvalue()
-                strbuffer.close()
-            #uleb
-            elif length == 0xfff2:
-                value = decode_unsigned_leb(buffer)
-            #sleb
-            elif length == 0xfff3:
-                value = decode_unsigned_leb(buffer)
-            #in strtab
-            if df[0] == DW_AT_name:
-                if found_str and (df[1] == DW_FORM_strp):
-                    value = strtab[value]
-            cu["data"][df[0]] = value 
-        """
-        if 0x10 in cu["data"]: 
-            read_debugline(buffer, debug_line["offset"], cu)
-        """
-    elf["compile_units"] = cus        
+        tree = formats[0][0]
+        abbrev = decode_unsigned_leb(buffer) 
+        nodes = [tree] 
+        level = [] 
+        i = 0                               
+        while i < len(nodes): 
+            #read attrs of this node 
+            node = nodes[i]
+            for format in node[0][3]:
+                length = attr_form_to_len[format[1]] 
+                value = None 
+                if length < 0xfff1:
+                    value = string_to_unsigned(_read(length)) 
+                #c string
+                elif length == 0xfff1:
+                    strbuffer = StringIO()
+                    while True:
+                        c = _read(ELF8)
+                        if c == "\x00":
+                            break
+                        strbuffer.write(c) 
+                    value = strbuffer.getvalue()
+                    strbuffer.close()
+                #uleb
+                elif length == 0xfff2:
+                    value = decode_unsigned_leb(buffer)
+                #sleb
+                elif length == 0xfff3:
+                    value = decode_unsigned_leb(buffer)
+                #in strtab
+                if format[0] == DW_AT_name:
+                    if format[1] == DW_FORM_strp:
+                        value = strtab[value]
+                #cu["data"][format[0]] = value 
+                print value
+            #if children, iter over children
+            pdb.set_trace()
+            if node[1]: 
+                level.append((nodes, i+i)) 
+                nodes = node[1] 
+                i = 0
+                continue
+            #next node in nodes
+            i += 1 
+            #if this is the last node, go upper
+            if i == len(nodes):
+                if not level:
+                    break
+                nodes, index = level.pop() 
+                i = index 
+
+def read_debuginfo(buffer):
+    #sanity check
+    sections = elf["sections"] 
+    debug_list = [".debug_info",
+            ".debug_abbrev",
+            ".debug_str",
+            ".debug_line"] 
+    if not has_sections(debug_list, section_names):
+        raise Exception("need section %s" % str(debug_list))
+    debug_sections = get_sections(debug_list, sections)
+    debug_info, debug_abbrev, debug_str, debug_line = sections
+    cu_addrs = get_CU_offsets(buffer, debug_info)
+    cu_headers = read_CU_headers(buffer, cu_addrs)
+    #read tag tree in a CU 
+    read_CU_format_tree(buffer, cu_headers)
+    read_CU_data_tree(buffer, cu_headers)
+
+
 
 def read_debugline(buffer,debugline_offset, cu):
     buffer.seek(debugline_offset)
