@@ -3,7 +3,9 @@ import os
 import sys 
 import getopt 
 import os.path
+import pdb
 import elfutils
+import dwarf
 #import cProfile
 
 
@@ -16,6 +18,7 @@ def print_usage():
     -r Display the relocations (if present)
     -S Display the section's header
     -s Display the symbol table 
+    -p Raw dump of a section, followed by the name of section
     """
     exit(2)
 
@@ -45,8 +48,7 @@ def print_symbol(elf):
     NAME, BIND, TYPE, VIS, INDEX, VALUE, SIZE = range(7)
     type_table = elfutils.sym_type 
     bind_type_table = elfutils.sym_bind_type
-    vis_type_table = elfutils.sym_vis_type
-    pdb.set_trace()
+    vis_type_table = elfutils.sym_vis_type 
     for symtab in symtabs:
         print "in", symtab
         print of.format("addr", "type", "visiblity", "bind", "name")
@@ -138,21 +140,59 @@ def print_rela(elf):
                     "Sym.Index", "Sym.Name") 
             for item in rela: 
                 print of.format(hex(item[0]), rel_type[item[2]],
-                        item[3], item[1], symtab[item[1]][0]) 
+                        hex(item[3]), item[1], symtab[item[1]][0]) 
 
 def print_dwarf_info(elf):
     pass
 
+def hex_dump(data):
+    out_write = sys.stdout.write 
+    for index, byte in enumerate(bytearray(data)):        
+        byte = hex(byte)[2:]
+        if len(byte) == 1:
+            byte = byte.zfill(2) 
+        if not (index % 16):
+            out_write("".join(("\n", hex(index)[2:].zfill(6), ": ", byte)))
+        else:
+            out_write("".join((" ", byte))) 
+
+def text_dump(data):
+    import string
+    out_write = sys.stdout.write 
+    printable = string.printable 
+    for index, byte in enumerate(data): 
+        if byte not in printable: 
+            try:
+                byte = hex(byte)
+            except TypeError:
+                byte = "0x00"
+        if not (index % 32): 
+            out_write("".join(("\n", hex(index)[2:].zfill(6), ": ", byte)))
+        else: 
+            out_write("".join((" ", byte)))
+        
+
+def print_section_data(elf, *args): 
+    if not elf["target"]:
+        raise Exception("reqeuest for section failed")
+    data = elf["target"] 
+    section = args[1]
+    print "section: ", section 
+    if section in (".comment", ".strtab"):
+        text_dump(data) 
+    else:
+        hex_dump(data)    
+    print "\n"      
 
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dhlrsSw:")
+        opts, args = getopt.getopt(sys.argv[1:], "dhlrpsSw:")
     except getopt.GetoptError, err:        
         print str(err)
         print_usage() 
     if len(args) == 0:
         print_usage()
-    path = args[0]
+    path = args[0] 
     if not os.path.exists(path):
         print_usage()
     header = False
@@ -162,7 +202,8 @@ def main():
     symbol = False 
     dwarf_info = False
     rela = False
-    flags = 0
+    print_section = False
+    flags = 0 
     for o, a in opts:
         if o == "--help":
             print_usage()
@@ -185,10 +226,16 @@ def main():
         elif o == "-r":
             rela = True
             flags |= elfutils.ELF_RELA
+        elif o == "-p":
+            print_section = True 
+            flags |= elfutils.ELF_PSECTION 
+            if len(args) < 2:
+                print_usage()
+                assert False, "option -p requires more args"
         else:
             assert False, "unhandled options" 
     #cProfile.runctx("elfutils.set_target(path)", globals(), locals(), "readelf.trace")    
-    elf = elfutils.set_target(path, flags)
+    elf = elfutils.set_target(path, flags, *args) 
     if dynamic: 
         print_dynamic(elf)
     if header: 
@@ -203,6 +250,8 @@ def main():
         print_rela(elf)
     if dwarf_info: 
         print_dwarf_info(elf)
+    if print_section: 
+        print_section_data(elf, *args)
 
 if __name__ == "__main__":
     main()

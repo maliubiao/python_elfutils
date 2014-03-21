@@ -289,3 +289,32 @@ offset    type           Addend    Sym.Index Sym.Name
 0x201ff0  R_386_GLOB_DAT 0         14        _ITM_registerTMCloneTable
 0x201ff8  R_386_GLOB_DAT 0         15        __cxa_finalize
 ```
+```shell	
+python readelf.py -p baseutils.so .strtab
+
+000000: 0x00 c r t s t u f f . c 0x00 _ _ J C R _ L I S T _ _ 0x00 d e r e g i s
+000020: t e r _ t m _ c l o n e s 0x00 r e g i s t e r _ t m _ c l o n e s
+000040: 0x00 _ _ d o _ g l o b a l _ d t o r s _ a u x 0x00 c o m p l e t e d
+000060: . 6 1 2 1 0x00 _ _ d o _ g l o b a l _ d t o r s _ a u x _ f i n i
+000080: _ a r r a y _ e n t r y 0x00 f r a m e _ d u m m y 0x00 _ _ f r a m e
+0000a0: _ d u m m y _ i n i t _ a r r a y _ e n t r y 0x00 b a s e u t i l
+0000c0: s . c 0x00 b a s e u t i l s _ g e t _ t y p e s _ l e n g t h 0x00 b
+0000e0: a s e u t i l s _ s t r i n g _ t o _ s i g n e d 0x00 b a s e u t
+000100: i l s _ s t r i n g _ t o _ u n s i g n e d 0x00 b a s e u t i l s
+000120: _ m e t h o d s 0x00 b a s e u t i l s _ s t r i n g _ t o _ u n s
+000140: i g n e d _ d o c 0x00 b a s e u t i l s _ s t r i n g _ t o _ s i
+000160: g n e d _ d o c 0x00 b a s e u t i l s _ g e t _ t y p e s _ l e n
+000180: g t h _ d o c 0x00 _ _ F R A M E _ E N D _ _ 0x00 _ _ J C R _ E N D _
+0001a0: _ 0x00 _ _ d s o _ h a n d l e 0x00 _ D Y N A M I C 0x00 _ _ T M C _ E N
+0001c0: D _ _ 0x00 _ G L O B A L _ O F F S E T _ T A B L E _ 0x00 P y D i c t
+0001e0: _ S e t I t e m S t r i n g 0x00 _ I T M _ d e r e g i s t e r T M
+000200: C l o n e T a b l e 0x00 P y _ I n i t M o d u l e 4 _ 6 4 0x00 _ e d
+000220: a t a 0x00 _ f i n i 0x00 i n i t b a s e u t i l s 0x00 P y E r r _ S e
+000240: t S t r i n g 0x00 P y E x c _ T y p e E r r o r 0x00 _ _ g m o n _ s
+000260: t a r t _ _ 0x00 P y S t r i n g _ S i z e 0x00 _ e n d 0x00 P y A r g _
+000280: P a r s e T u p l e 0x00 P y E x c _ A s s e r t i o n E r r o r 0x00
+0002a0: _ _ b s s _ s t a r t 0x00 P y D i c t _ N e w 0x00 P y I n t _ F r o
+0002c0: m L o n g 0x00 _ J v _ R e g i s t e r C l a s s e s 0x00 _ I T M _ r
+0002e0: e g i s t e r T M C l o n e T a b l e 0x00 _ _ c x a _ f i n a l i
+000300: z e @ @ G L I B C _ 2 . 2 . 5 0x00 _ i n i t 0x00
+```
