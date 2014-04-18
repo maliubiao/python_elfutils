@@ -184,9 +184,12 @@ def print_section_data(elf, *args):
         hex_dump(data)    
     print "\n"      
 
+def print_verneed(elf):
+    pass
+
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dhlrpsSw:")
+        opts, args = getopt.getopt(sys.argv[1:], "dhlrpsSvw:")
     except getopt.GetoptError, err:        
         print str(err)
         print_usage() 
@@ -204,6 +207,7 @@ def main():
     rela = False
     print_section = False
     flags = 0 
+    verneed = False
     for o, a in opts:
         if o == "--help":
             print_usage()
@@ -232,6 +236,9 @@ def main():
             if len(args) < 2:
                 print_usage()
                 assert False, "option -p requires more args"
+        elif o == "-v":
+            verneed = True
+            flags |= elfutils.ELF_VERNEED
         else:
             assert False, "unhandled options" 
     #cProfile.runctx("elfutils.set_target(path)", globals(), locals(), "readelf.trace")    
@@ -252,6 +259,8 @@ def main():
         print_dwarf_info(elf)
     if print_section: 
         print_section_data(elf, *args)
+    if verneed:
+        print_verneed(elf)
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,11 @@
 import elfutils
+import pdb
+from pprint import pprint
+from struct import unpack
+from collections import OrderedDict
+
+from baseutils import string_to_unsigned
+from baseutils import string_to_signed
 
 DW_TAG_array_type = 0x01 
 DW_TAG_class_type = 0x02
@@ -63,6 +70,13 @@ DW_TAG_template_alias = 0x43
 DW_TAG_lo_user = 0x4080
 DW_TAG_hi_user = 0xffff
 
+#GNU extensions 
+DW_TAG_GNU_template_parameter_pack = 0x4107
+DW_TAG_GNU_formal_parameter_pack = 0x4108
+DW_TAG_GNU_call_site = 0x4109
+DW_TAG_GNU_call_site_parameter = 0x410a
+
+
 TAG_types = {
         0x01: "DW_TAG_array_type",
         0x02: "DW_TAG_class_type",
@@ -125,8 +139,13 @@ TAG_types = {
         0x42: "DW_TAG_type_rvalue_reference_type",
         0x43: "DW_TAG_template_alias",
         0x4080: "DW_TAG_lo_user",
-        0xffff: "DW_TAG_hi_user"
+        0xffff: "DW_TAG_hi_user",
+        0x4107: "DW_TAG_GNU_template_parameter_pack",
+        0x4108: "DW_TAG_GNU_formal_parameter_pack",
+        0x4109: "DW_TAG_GNU_call_site",
+        0x410a: "DW_TAG_GNU_call_site_parameter" 
         }
+
 
 #has children ?
 DW_CHILDREN_no = 0x00
@@ -227,6 +246,42 @@ DW_AT_linkage_name = 0x6e
 DW_AT_lo_user = 0x2000
 DW_AT_hi_user = 0x3fff
 
+#GNU extensions
+#http://gcc.gnu.org/wiki/DwarfSeparateTypeInfo
+#gcc/include/dwarf2.def
+DW_AT_sf_names = 0x2101
+DW_AT_src_info = 0x2102
+DW_AT_mac_info = 0x2103
+DW_AT_src_coords = 0x2104
+DW_AT_body_begin = 0x2105
+DW_AT_body_end = 0x2106
+DW_AT_GNU_vector = 0x2107
+DW_AT_GNU_guarded_by = 0x2108
+DW_AT_GNU_pt_guarded_by = 0x2109
+DW_AT_GNU_guarded = 0x210a
+DW_AT_GNU_locks_excluded = 0x210c
+DW_AT_GNU_exclusive_locks_required = 0x210d
+DW_AT_GNU_shared_locks_required = 0x210e
+DW_AT_GNU_odr_signature = 0x210f
+DW_AT_GNU_template_name = 0x2110
+DW_AT_GNU_call_site_value = 0x2111
+DW_AT_GNU_call_site_data_value = 0x2112
+DW_AT_GNU_call_site_target = 0x2113
+DW_AT_GNU_call_site_target_clobbered = 0x2114
+DW_AT_GNU_tail_call = 0x2115
+DW_AT_GNU_all_tail_call_sites = 0x2116
+DW_AT_GNU_all_call_sites = 0x2117
+DW_AT_GNU_all_source_call_sites = 0x2118
+DW_AT_GNU_macros = 0x2119
+DW_AT_GNU_dwo_name = 0x2130
+DW_AT_GNU_dwo_id = 0x2131
+DW_AT_GNU_ranges_base = 0x2132
+DW_AT_GNU_addr_base = 0x2133
+DW_AT_GNU_pubnames = 0x2134
+DW_AT_GNU_pubtypes = 0x2135
+DW_AT_GNU_discriminator = 0x2136 
+
+
 AT_types = {
         0x01: "DW_AT_sibling",
         0x02: "DW_AT_location",
@@ -320,8 +375,40 @@ AT_types = {
         0x6d: "DW_AT_enum_class",
         0x6e: "DW_AT_linkage_name",
         0x2000: "DW_AT_lo_user",
-        0x3fff: "DW_AT_hi_user"
+        0x3fff: "DW_AT_hi_user",
+        0x2101: "DW_AT_sf_names", 
+        0x2102: "DW_AT_src_info", 
+        0x2103: "DW_AT_mac_info", 
+        0x2104: "DW_AT_src_coords", 
+        0x2105: "DW_AT_body_begin", 
+        0x2106: "DW_AT_body_end", 
+        0x2107: "DW_AT_GNU_vector", 
+        0x2108: "DW_AT_GNU_guarded_by", 
+        0x2109: "DW_AT_GNU_pt_guarded_by", 
+        0x210a: "DW_AT_GNU_guarded", 
+        0x210c: "DW_AT_GNU_locks_excluded", 
+        0x210d: "DW_AT_GNU_exclusive_locks_required", 
+        0x210e: "DW_AT_GNU_shared_locks_required", 
+        0x210f: "DW_AT_GNU_odr_signature", 
+        0x2110: "DW_AT_GNU_template_name",
+        0x2111: "DW_AT_GNU_call_site_value", 
+        0x2112: "DW_AT_GNU_call_site_data_value",
+        0x2113: "DW_AT_GNU_call_site_target", 
+        0x2114: "DW_AT_GNU_call_site_target_clobbered", 
+        0x2115: "DW_AT_GNU_tail_call", 
+        0x2116: "DW_AT_GNU_all_tail_call_sites", 
+        0x2117: "DW_AT_GNU_all_call_sites", 
+        0x2118: "DW_AT_GNU_all_source_call_sites", 
+        0x2119: "DW_AT_GNU_macros", 
+        0x2130: "DW_AT_GNU_dwo_name", 
+        0x2131: "DW_AT_GNU_dwo_id", 
+        0x2132: "DW_AT_GNU_ranges_base", 
+        0x2133: "DW_AT_GNU_addr_base", 
+        0x2134: "DW_AT_GNU_pubnames", 
+        0x2135: "DW_AT_GNU_pubtypes", 
+        0x2136: "DW_AT_GNU_discriminator" 
         }
+
 #format
 #8c machine addr
 DW_FORM_addr = 0x01 
@@ -477,16 +564,32 @@ LINE_EXT_ops = {
         0xff: "DW_LINE_hi_user"
         }
 
-def decode_unsigned_leb(buffer):
+
+def decode_unsigned_leb(buffer): 
     l = 0L 
+    empty = 0
+    count = 0
     while True: 
         part = ord(buffer.read(1)) 
-        #stream end, high order is 0
+        #stream end, high bit 0 
         if not part & 0x80:
-            l = (l << 7) + part
-            break 
-        #remove the hight order 
-        l = l << 7 + part & 0x7f
+            if empty:
+                l = (part << (empty * 7)) + l
+            else:
+                if l:
+                    l = (part << (count * 7)) + l 
+                else:
+                    l = part
+            break
+        if not part & 0x7f:
+            empty += 1
+            continue
+        if empty:
+            l = ((part & 0x7f) << (empty * 7)) + l
+            empty = 0
+        else: 
+            l = ((part & 0x7f) << (count * 7)) + l
+        count += 1
     return l 
 
 def encode_unsigned_leb(integer):
@@ -509,7 +612,7 @@ def encode_unsigned_leb(integer):
     final = pc.getvalue()
     pc.close()
     return final
-    
+
 
 def get_CU_offsets(buffer, debug_info): 
     #get CU addr list
@@ -521,17 +624,17 @@ def get_CU_offsets(buffer, debug_info):
         if cur >= section_end: 
             break
         cu_addrs.append(cur) 
-        buffer.seek(string_to_unsigned(_read(ELF32)), 1) 
+        buffer.seek(string_to_unsigned(buffer.read(4)), 1) 
     return cu_addrs
 
 def read_CU_headers(buffer, cu_addrs):
     cu_headers = [] 
     for cu_addr in cu_addrs:    
         buffer.seek(cu_addr) 
-        unit_length = string_to_unsigned(_read(ELF32))
-        version = string_to_unsigned(_read(ELF16)) 
-        abbrev_offset = string_to_unsigned(_read(ELF32))
-        addr_size = string_to_signed(_read(ELF8)) 
+        unit_length = string_to_unsigned(buffer.read(4))
+        version = string_to_unsigned(buffer.read(2)) 
+        abbrev_offset = string_to_unsigned(buffer.read(4))
+        addr_size = string_to_signed(buffer.read(1)) 
         cu_headers.append({
             "length": unit_length,
             "version": version,
@@ -543,65 +646,62 @@ def read_CU_headers(buffer, cu_addrs):
             }) 
     return cu_headers
 
-def read_CU_format_tree(buffer, cu_headers, debug_abbrev):
-    for cu in cu_headers: 
-        buffer.seek(cu["abbrev_offset"]+debug_abbrev["offset"]) 
-        level = []
-        cur = [[], [], []] 
-        #tree depth
-        levels = [level] 
+def read_CU_flat_tree(buffer, cu_headers, debug_abbrev): 
+    for cu in cu_headers:
+        buffer.seek(cu["abbrev_offset"] + debug_abbrev["offset"]) 
+        entry_dict = OrderedDict()
         while True: 
-            abbrev = decode_unsigned_leb(buffer) 
-            #NULL entry, siblings end
+            cur = {}
+            cur["current_offset"] = buffer.tell()
+            abbrev = decode_unsigned_leb(buffer)
+            #NULL entry, CU ends
             if not abbrev:
-                #back to father, break if no father 
-                if not cur[2]:
-                    break
-                level = cur[2] 
-                continue
-            tag_name = TAG_types[decode_unsigned_leb(buffer)] 
-            children = string_to_unsigned(_read(1))
-            #[[self], [children], father] 
-            attrs = []
-            cur[0].extend([abbrev, tag_name,  children, attrs]) 
-            #read attrs
+                break
+            try:
+                tagname = TAG_types[decode_unsigned_leb(buffer)]
+            except Exception as e:
+                print e
+                pdb.set_trace() 
+            entry_dict[abbrev] = cur
+            has_children = string_to_unsigned(buffer.read(1))              
+            cur["tagname"] = tagname
+            cur["has_children"] = has_children
+            attrs = [] 
+            cur["attrs"] = attrs 
+            print "TAGNAME", tagname
             while True:
                 attr_type = decode_unsigned_leb(buffer)
                 attr_form = decode_unsigned_leb(buffer)
                 #attr list end
                 if not (attr_type or attr_form): 
                     break 
-                #print AT_types[attr_type], FORM_types[attr_form] 
                 attrs.append((attr_type, attr_form)) 
-            level.append(cur)
-            if children:
-                #add children 
-                level = cur[1] 
-                levels.append(level)
-                #remember father 
-                cur = [[], [], cur] 
-            else:
-                cur = [[], [], []] 
-        cu["data_formats"] = levels
-    return cu_headers
+                print AT_types[attr_type], FORM_types[attr_form] 
+            cur["next_offset"] = buffer.tell()
+
+        cu["data_formats"] = entry_dict 
+
 
 def read_by_formats(buffer, formats, strtab): 
     attrs_list = []
     for format in formats:
-        length = attr_form_to_len[format[1]] 
+        attr_type, attr_form = format
+        print AT_types[attr_type], FORM_types[attr_form] 
+        length = attr_form_to_len[attr_form] 
         value = None 
-        if length < 0xfff1:
-            value = string_to_unsigned(_read(length)) 
+        if attr_form == DW_FORM_flag_present:
+            value = 1
+        elif length < 0xfff1:
+            value = string_to_unsigned(buffer.read(length)) 
         #c string
         elif length == 0xfff1:
-            strbuffer = StringIO()
+            buf = []
             while True:
-                c = _read(ELF8)
+                c = buffer.read(1)
                 if c == "\x00":
                     break
-                strbuffer.write(c) 
-            value = strbuffer.getvalue()
-            strbuffer.close()
+                buf.append(c) 
+            value = "".join(buf) 
         #uleb
         elif length == 0xfff2:
             value = decode_unsigned_leb(buffer)
@@ -609,14 +709,38 @@ def read_by_formats(buffer, formats, strtab):
         elif length == 0xfff3:
             value = decode_unsigned_leb(buffer)
         #in strtab
-        if format[0] == DW_AT_name:
-            if format[1] == DW_FORM_strp:
-                value = strtab[value]
-        attrs_list.append((format[0], value))
+        if attr_type == DW_AT_name:
+            if attr_form == DW_FORM_strp:
+                try:
+                    value = strtab[value]
+                except Exception as e:
+                    print "strtab key error: %d", value 
+        attrs_list.append((attr_type, value))
     return attrs_list
 
+def read_CU_data(buffer, cu_headers, debug_str):
+    strtab = elfutils.build_strtab(buffer, debug_str)        
+    for cu in cu_headers: 
+        buffer.seek(cu["data_offset"])
+        data_formats = cu["data_formats"] 
+        data = cu["data"]
+        #7byte header
+        end = cu["length"] + cu["data_offset"] - 7
+        while True: 
+            print "offset", hex(buffer.tell()) 
+            pdb.set_trace()
+            if buffer.tell() >= end:
+                break
+            abbrev = decode_unsigned_leb(buffer) 
+            if not abbrev:
+                abbrev = decode_unsigned_leb(buffer) 
+            data[abbrev] = read_by_formats(buffer, data_formats[abbrev]["attrs"], strtab) 
+            pprint(data[abbrev])
+            pprint(data_formats[abbrev])
+
+"""
 def read_CU_data_tree(buffer, cu_headers, debug_str): 
-    strtab = build_strtab(buffer, debug_str)        
+
     for cu in cu_headers:
         buffer.seek(cu["data_offset"])
         formats = cu["data_formats"]
@@ -629,8 +753,7 @@ def read_CU_data_tree(buffer, cu_headers, debug_str):
             node = nodes[i]
             #read abbrev
             abbrev = decode_unsigned_leb(buffer) 
-            #read formats
-            pdb.set_trace()
+            #read formats 
             attrs_list = read_by_formats(buffer,  node[0][3], strtab) 
             #if children, iter over children 
             if node[1]: 
@@ -646,23 +769,27 @@ def read_CU_data_tree(buffer, cu_headers, debug_str):
                     break
                 nodes, index = level.pop() 
                 i = index 
-
-def read_debuginfo(buffer):
+"""
+def read_debuginfo(elf, buffer):
     #sanity check
     sections = elf["sections"] 
-    debug_list = [".debug_info", ".debug_abbrev",
-            ".debug_str", ".debug_line"] 
-    
-    sections = get_sections(debug_list, sections)
+    debug_list = (".debug_info",
+            ".debug_abbrev",
+            ".debug_str",
+            ".debug_line") 
+    sections = elfutils.get_sections(debug_list, sections)
+
     if len(sections) != len(debug_list):
         raise Exception("need section %s" % str(debug_list))
 
     debug_info, debug_abbrev, debug_str, debug_line = sections
     cu_addrs = get_CU_offsets(buffer, debug_info)
+    #read headers
     cu_headers = read_CU_headers(buffer, cu_addrs)
     #read tag tree in a CU 
-    read_CU_format_tree(buffer, cu_headers, debug_abbrev)
-    read_CU_data_tree(buffer, cu_headers, debug_str)
+    read_CU_flat_tree(buffer, cu_headers, debug_abbrev)
+    #read data tree in a CU
+    read_CU_data(buffer, cu_headers, debug_str)
 
 
 
@@ -670,28 +797,28 @@ def read_debugline(buffer,debugline_offset, cu):
     buffer.seek(debugline_offset)
     buffer.seek(cu["data"][0x10], 1) 
     print hex(buffer.tell())
-    unit_len = string_to_unsigned(_read(ELF32)) 
+    unit_len = string_to_unsigned(buffer.read(ELF32)) 
     stop_point = buffer.tell() + unit_len
-    version = string_to_unsigned(_read(ELF16))
-    header_len = string_to_unsigned(_read(ELF32))
-    mini_ins_len = string_to_unsigned(_read(ELF8))
-    #max_op_per_ins =string_to_unsigned(_read(ELF8))
-    default_is_stmt = string_to_unsigned(_read(ELF8))
-    line_base = string_to_unsigned(_read(ELF8))
-    line_range = string_to_unsigned(_read(ELF8))
-    op_base = string_to_unsigned(_read(ELF8))
+    version = string_to_unsigned(buffer.read(ELF16))
+    header_len = string_to_unsigned(buffer.read(ELF32))
+    mini_ins_len = string_to_unsigned(buffer.read(ELF8))
+    #max_op_per_ins =string_to_unsigned(buffer.read(ELF8))
+    default_is_stmt = string_to_unsigned(buffer.read(ELF8))
+    line_base = string_to_unsigned(buffer.read(ELF8))
+    line_range = string_to_unsigned(buffer.read(ELF8))
+    op_base = string_to_unsigned(buffer.read(ELF8))
     opargs_array = []
     opargs_array_len = op_base - 1
     start = 1
     while start <= opargs_array_len: 
-        opargs_array.append(string_to_unsigned(_read(ELF8)))
+        opargs_array.append(string_to_unsigned(buffer.read(ELF8)))
         start += 1        
     str_buffer = StringIO()    
     while True:
-        c = _read(ELF8) 
+        c = buffer.read(ELF8) 
         if c == "\x00":
             back = buffer.tell()
-            if _read(ELF8) == "\x00":
+            if buffer.read(ELF8) == "\x00":
                 break
             else:
                 buffer.seek(back) 
@@ -704,11 +831,11 @@ def read_debugline(buffer,debugline_offset, cu):
         dir_index = 0
         mtime = 0
         file_len = 0 
-        c = _read(ELF8)
+        c = buffer.read(ELF8)
         if c == "\x00":
-            dir_index = string_to_unsigned(_read(ELF8)) 
-            mtime = string_to_unsigned(_read(ELF8)) 
-            file_len = string_to_unsigned(_read(ELF8)) 
+            dir_index = string_to_unsigned(buffer.read(ELF8)) 
+            mtime = string_to_unsigned(buffer.read(ELF8)) 
+            file_len = string_to_unsigned(buffer.read(ELF8)) 
             file_names.append((
                 str_buffer.getvalue(),
                 dir_index,
@@ -716,7 +843,7 @@ def read_debugline(buffer,debugline_offset, cu):
                 file_len))
             str_buffer.truncate(0)
             back = buffer.tell()
-            if _read(ELF8) == "\x00":
+            if buffer.read(ELF8) == "\x00":
                 break
             else:
                 buffer.seek(back)
@@ -741,10 +868,10 @@ def read_debugline(buffer,debugline_offset, cu):
     while True:
         if buffer.tell() == stop_point:
             break
-        op = string_to_signed(_read(ELF8))   
+        op = string_to_signed(buffer.read(ELF8))   
         print "op", hex(op), op
         if op == DW_LNS_copy: 
-            next = string_to_unsigned(_read(ELF8))
+            next = string_to_unsigned(buffer.read(ELF8))
             if next == 1: 
                 #sequences end, reset registers 
                 reg_address = 0
@@ -776,16 +903,16 @@ def read_debugline(buffer,debugline_offset, cu):
 
         elif op == DW_LNS_advance_pc: 
             if reg_fixed:
-                reg_address = string_to_unsigned(_read(ELF64)) 
+                reg_address = string_to_unsigned(buffer.read(ELF64)) 
                 reg_fixed = False 
             else:
-                reg_address += string_to_unsigned(_read(ELF16)) 
+                reg_address += string_to_unsigned(buffer.read(ELF16)) 
         elif op == DW_LNS_advance_line: 
-            reg_line += string_to_unsigned(_read(ELF8)) 
+            reg_line += string_to_unsigned(buffer.read(ELF8)) 
         elif op == DW_LNS_set_file:
-            reg_file = string_to_unsigned(_read(ELF8)) 
+            reg_file = string_to_unsigned(buffer.read(ELF8)) 
         elif op == DW_LNS_set_column:
-            reg_column = string_to_unsigned(_read(ELF8)) 
+            reg_column = string_to_unsigned(buffer.read(ELF8)) 
         elif op == DW_LNS_negate_stmt:
             is_stmt = not is_stmt 
         elif op == DW_LNS_set_basic_block:
@@ -795,7 +922,7 @@ def read_debugline(buffer,debugline_offset, cu):
         elif op == DW_LNS_fixed_advance_pc:
             reg_fixed = True
         elif op == DW_LINE_set_address:
-            reg_address = string_to_unsigned(_read(ELF64)) 
+            reg_address = string_to_unsigned(buffer.read(ELF64)) 
         elif op == DW_LINE_define_file:
             pass 
 
