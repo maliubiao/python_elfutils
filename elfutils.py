@@ -5,9 +5,9 @@ import pdb
 from cStringIO import StringIO
 from baseutils import string_to_unsigned
 from baseutils import string_to_signed
+import dwarf
 
-elf = None
-_read = None
+elf = None 
 
 #options 
 ELF_HEADER = 1 << 2
@@ -15,6 +15,7 @@ ELF_SYMBOL = 1 << 3
 ELF_DYNAMIC = 1 << 4
 ELF_RELA = 1 << 5
 ELF_PSECTION = 1 << 6
+ELF_VERNEED = 1 << 7
 DWARF_INFO = 1 << 10 
 
 
@@ -464,9 +465,11 @@ def print_mem_usage(position):
 
 def read_header(buffer):
     buffer.seek(0)
+    _read = buffer.read
     elf_header = elf['elf_header']
     elf_header["file_ident"] = _read(ELF32)
-    assert elf_header["file_ident"] == ELFSIG
+    if elf_header["file_ident"] != ELFSIG:
+        raise AssertionError("This is not a ELF object")
     file_class = string_to_unsigned(_read(ELF8)) 
     if file_class == ELFCLASS32:
         ehdr = Elf32_Ehdr
@@ -494,6 +497,7 @@ def read_header(buffer):
     elf_header["e_shstrndx"] = string_to_unsigned(_read(ehdr["e_shstrndx"]))
 
 def read_section_header(buffer):
+    _read = buffer.read
     elf_header = elf["elf_header"]
     sections = elf["sections"]
     e_shoff = elf_header["e_shoff"]
@@ -520,6 +524,7 @@ def read_section_header(buffer):
 
 
 def read_program_header(buffer):
+    _read = buffer.read
     elf_header = elf["elf_header"]
     programs = elf["programs"] 
     buffer.seek(elf_header["e_phoff"])
@@ -564,7 +569,7 @@ def read_program_header(buffer):
 def build_strtab(buffer, section): 
     buffer.seek(section["offset"])        
     size = section["size"] 
-    data = _read(size) 
+    data = buffer.read(size) 
     strtab = {}
     j = 0
     strend = "\x00"
@@ -595,7 +600,7 @@ def read_strtab(buffer):
     shstrtab_section = None
     for section in strtab_sections:
         buffer.seek(section["offset"])
-        if ".text" in _read(section["size"]):
+        if ".text" in buffer.read(section["size"]):
             shstrtab_section = section 
     if not shstrtab_section:
         print "error: where is .shstrtab?"
@@ -626,7 +631,7 @@ def read_symtab(buffer):
         if section["type"] == SHT_DYNSYM:
             symtab_sections.append(section)
     #use local alias
-    sym_read = _read
+    sym_read = buffer.read
     elf_type = elf["elf_header"]["file_class"]
     for section in symtab_sections: 
         buffer.seek(section["offset"]) 
@@ -674,6 +679,7 @@ def read_symtab(buffer):
         #sym_data.close() 
 
 def read_rela(buffer):
+    _read = buffer.read
     sections = elf["sections"] 
     rel_list = []
     for section in sections:
@@ -728,6 +734,7 @@ def read_rela(buffer):
     
 
 def read_dynamic(buffer): 
+    _read = buffer.read
     sections = elf["sections"]
     dynamic = None
     for section in sections:
@@ -795,13 +802,15 @@ def read_verneed(buffer):
     sections = elf["sections"]
     verneed = None
     for section in sections: 
-        if section["type"] == SHT_GNU_versym:
+        if section["type"] == SHT_GNU_verneed:
             verneed = section            
             break     
     if not verneed:
         raise Exception("No section gnu.version")
     buffer.seek(verneed["offset"])     
-    total = versym["size"] / versym["entsize"]
+    if not verneed["entsize"]:
+        raise Exception("No version requirements")
+    total = verneed["size"] / verneed["entsize"]
     deflist = []
     pdb.set_trace()
     for entry in range(total):
@@ -861,7 +870,6 @@ def set_target(path, flags, *args):
     if flags & ELF_DYNAMIC:
         flags |= ELF_SYMBOL
     global elf 
-    global _read
     elf = {
         "elf_header": {},
         "sections": [],
@@ -874,8 +882,7 @@ def set_target(path, flags, *args):
         "target": None
         } 
     f = open(path, "rb")
-    buffer = mmap.mmap(f.fileno(), 0, mmap.MAP_PRIVATE, mmap.PROT_READ)
-    _read = buffer.read
+    buffer = mmap.mmap(f.fileno(), 0, mmap.MAP_PRIVATE, mmap.PROT_READ) 
     if flags & ELF_HEADER:
         read_header(buffer) 
         read_section_header(buffer)
@@ -888,9 +895,11 @@ def set_target(path, flags, *args):
     if flags & ELF_RELA:
         read_rela(buffer)
     if flags & DWARF_INFO: 
-        read_debuginfo(buffer) 
+        dwarf.read_debuginfo(elf, buffer) 
     if flags & ELF_PSECTION:
         read_section(buffer, args[1])
+    if flags & ELF_VERNEED:
+        read_verneed(buffer)
     buffer.close()
     f.close()
     return elf
