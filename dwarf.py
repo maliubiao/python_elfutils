@@ -4,9 +4,6 @@ from pprint import pprint
 from struct import unpack
 from collections import OrderedDict
 
-from baseutils import string_to_unsigned
-from baseutils import string_to_signed
-
 DW_TAG_array_type = 0x01 
 DW_TAG_class_type = 0x02
 DW_TAG_entry_point = 0x03 

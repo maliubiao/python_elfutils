@@ -44,20 +44,29 @@ def print_dynamic(elf):
 
 def print_symbol(elf):
     symtabs = elf["symtabs"]
-    of = "{:<15}{:<10}{:<10}{:<10}{:<20}"
-    NAME, BIND, TYPE, VIS, INDEX, VALUE, SIZE = range(7)
+    verindex = elf["verindex"]
+    versym = elf["versym"]
+    versymlen = len(versym) - 1
+    of = "{:<15}{:<10}{:<10}{:<10}{:<20}" 
     type_table = elfutils.sym_type 
     bind_type_table = elfutils.sym_bind_type
     vis_type_table = elfutils.sym_vis_type 
     for symtab in symtabs:
         print "in", symtab
         print of.format("addr", "type", "visiblity", "bind", "name")
-        for symbol in symtabs[symtab]:
-            value = hex(symbol[VALUE])
-            name = symbol[NAME]
-            sym_type = type_table[symbol[TYPE]].split("_")[-1] 
-            bind_type = bind_type_table[symbol[BIND]].split("_")[-1] 
-            vis_type =  vis_type_table[symbol[VIS]].split("_")[-1] 
+        for i, symbol in enumerate(symtabs[symtab]): 
+            value = hex(symbol["st_value"])
+            name = symbol["st_name"] 
+            sym_type = type_table[symbol["st_type"]].split("_")[-1] 
+            bind_type = bind_type_table[symbol["st_bind"]].split("_")[-1] 
+            vis_type =  vis_type_table[symbol["st_other"]].split("_")[-1] 
+            if i <= versymlen: 
+                if versym[i] > 1:
+                    try:
+                        vernaux = verindex[versym[i]] 
+                        name += "@"+vernaux["vna_name"]
+                    except KeyError:
+                        pass 
             print of.format(value, sym_type, vis_type, bind_type, name)
         print "\n"
 
@@ -67,16 +76,16 @@ def print_pheader(elf):
     print of.format("Type", "Align", "Offset", "VirtAddr", "PhysAddr", "FileSize", "MemSize", "Flags")
     for entry in pheader:
         try:
-            ptype = elfutils.ph_type[entry['type']].split("_")[-1]
+            ptype = elfutils.ph_type[entry['p_type']].split("_")[-1]
         except:
             pdb.set_trace()
-        flag = elfutils.ph_flags[entry['flags']]
-        offset = hex(entry['offset'])
-        virt = hex(entry['virt'])
-        phys = hex(entry['phys'])
-        filesize = hex(entry['filesize'])
-        memsize = hex(entry['memsize'])
-        align = hex(entry['align'])
+        flag = elfutils.ph_flags[entry['p_flags']]
+        offset = hex(entry['p_offset'])
+        virt = hex(entry['p_vaddr'])
+        phys = hex(entry['p_paddr'])
+        filesize = hex(entry['p_filesz'])
+        memsize = hex(entry['p_memsz'])
+        align = hex(entry['p_align'])
         print of.format(ptype, align, offset, virt, phys, filesize, memsize, flag)
     if elf['interpreter']:
         print "INTERP: ", elf['interpreter']
@@ -84,19 +93,19 @@ def print_pheader(elf):
 
 def print_sheader(elf):
     sections = elf['sections']
-    of = "{:<20}{:<15}{:<10}{:<10}\n\t\t{:<10}{:<10}{:<10}{:<5}{:<5}{:<20}"
+    of = "{:<20}{:<15}{:<10}{:<10}\n\t\t{:<10}{:<10}{:<10}{:<10}{:<10}{:<20}"
     print of.format("Name", "Type", "Addr", "Offset", "Size", "Link", "Info", "Align", "Entsize", "Flag",) 
     for entry in sections:
-        name = entry['name']
-        type = elfutils.sh_type[entry['type']]
-        flag = elfutils.decide_shflags(entry['flag'])
-        addr = hex(entry['addr'])
-        offset = hex(entry['offset'])
-        size = hex(entry['size'])
-        link = hex(entry['link'])
-        info = hex(entry['info'])
-        align = hex(entry['align'])
-        entsize = hex(entry['entsize'])
+        name = entry['sh_name']
+        type = elfutils.sh_type[entry['sh_type']]
+        flag = elfutils.decide_shflags(entry['sh_flags'])
+        addr = hex(entry['sh_addr'])
+        offset = hex(entry['sh_offset'])
+        size = hex(entry['sh_size'])
+        link = hex(entry['sh_link'])
+        info = hex(entry['sh_info'])
+        align = hex(entry['sh_addralign'])
+        entsize = hex(entry['sh_entsize'])
         print of.format(name, type, addr, offset, size, link, info, align, entsize,  flag)
     print "\n"
 
@@ -130,8 +139,8 @@ def print_rela(elf):
             print "in", name
             print of.format("offset", "type", "Sym.Index",  "Sym.Name") 
             for item in rel: 
-                print of.format(hex(item[0]), rel_type[item[2]],
-                        item[1], symtab[item[1]][0])
+                print of.format(hex(item["r_offset"]), rel_type[item["r_type"]],
+                        item["r_symbol"], symtab[item["r_symbol"]][0])
     if "rela" in elf:       
         of = "{:<10}{:<15}{:<10}{:<10}{:<10}" 
         for name, rela in elf["rela"].iteritems(): 
@@ -139,8 +148,41 @@ def print_rela(elf):
             print of.format("offset", "type", "Addend",
                     "Sym.Index", "Sym.Name") 
             for item in rela: 
-                print of.format(hex(item[0]), rel_type[item[2]],
-                        hex(item[3]), item[1], symtab[item[1]][0]) 
+                print of.format(hex(item["r_offset"]), rel_type[item["r_type"]],
+                    hex(item["r_addend"]), item["r_symbol"], symtab[item["r_symbol"]]["st_name"]) 
+
+
+def print_ver(elf):
+    print "Symbol Version Table:"
+    of = "{:<15}{:<20}{:<15}"     
+    print of.format("INDEX", "HASH",  "NAME")
+    verindex = elf["verindex"]
+    verneed = elf["verneed"] 
+    pdb.set_trace()
+    for i in elf["versym"]:
+        if i == 0: 
+            print of.format(i, "LOCAL", "")
+        elif i == 1:    
+            print of.format(i, "GLOBAL", "")
+        else: 
+            try:
+                entry = verindex[i] 
+            except:
+                pdb.set_trace()
+            print of.format(i, hex(entry["vna_hash"]), entry["vna_name"])
+    print "LOCAL ->  The symbol is local, not available outside the object"
+    print "GLOBAL -> This symbol is defined in this object and is globally available\n"
+    print "all indexes available:"
+    of = "{:<15}{:<20}{:<15}{:<15}" 
+    of2 = "\t{:<15}{:<15}{:<20}{:<15}{:<15}" 
+    print of.format("NUM", "FILE", "VERSION", "ENTRIES")
+    for i,v in enumerate(verneed):
+        print of.format(i, v["vn_file"], v["vn_version"], v["vn_cnt"]) 
+        print of2.format("NUM", "INDEX", "NAME", "HASH", "FLAGS") 
+        for i, k in enumerate(v["vernaux"]):
+            print of2.format(i, k["vna_other"], k["vna_name"], hex(k["vna_hash"]), k["vna_flags"])
+        print ""
+
 
 def print_dwarf_info(elf):
     pass
@@ -184,8 +226,7 @@ def print_section_data(elf, *args):
         hex_dump(data)    
     print "\n"      
 
-def print_verneed(elf):
-    pass
+
 
 def main():
     try:
@@ -207,7 +248,7 @@ def main():
     rela = False
     print_section = False
     flags = 0 
-    verneed = False
+    ver = False
     for o, a in opts:
         if o == "--help":
             print_usage()
@@ -237,12 +278,12 @@ def main():
                 print_usage()
                 assert False, "option -p requires more args"
         elif o == "-v":
-            verneed = True
+            ver = True
             flags |= elfutils.ELF_VERNEED
         else:
             assert False, "unhandled options" 
     #cProfile.runctx("elfutils.set_target(path)", globals(), locals(), "readelf.trace")    
-    elf = elfutils.set_target(path, flags, *args) 
+    elf = elfutils.readelf(path, flags, *args) 
     if dynamic: 
         print_dynamic(elf)
     if header: 
@@ -259,8 +300,8 @@ def main():
         print_dwarf_info(elf)
     if print_section: 
         print_section_data(elf, *args)
-    if verneed:
-        print_verneed(elf)
+    if ver: 
+        print_ver(elf)
 
 if __name__ == "__main__":
     main()
